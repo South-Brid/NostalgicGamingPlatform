@@ -92,6 +92,17 @@ public class AppInstaller {
 		this.cacheDir = new File(context.getCacheDir(), "installer");
 	}
 
+	/** Install a local jar into a fixed app dir (used by the built-in game library) */
+	public AppItem installLocalJar(File jar, String dirName, String title) throws IOException {
+		srcJar = jar;
+		newDesc = loadManifest(jar);
+		appDirName = dirName;
+		targetDir = new File(Config.getAppDir(), dirName);
+		currentApp = new AppItem(dirName, title, newDesc.getVendor(), newDesc.getVersion());
+		Single.create(this::install).blockingGet();
+		return currentApp;
+	}
+
 	Descriptor getNewDescriptor() {
 		return newDesc;
 	}

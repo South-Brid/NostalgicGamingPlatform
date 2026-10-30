@@ -140,6 +140,13 @@ public class MicroActivity extends AppCompatActivity {
 		cutoutsEnabled = sp.getBoolean(PREF_ADD_CUTOUT_AREA, false) &&
 				Build.VERSION.SDK_INT >= Build.VERSION_CODES.P;
 		setupInsets();
+		if (!actionBarEnabled) {
+			int hintShown = sp.getInt("gamehub_menu_hint", 0);
+			if (hintShown < 3) {
+				Toast.makeText(this, "按手机「返回键」打开游戏菜单（切换键盘、退出等）\n长按返回键直接退出游戏", Toast.LENGTH_LONG).show();
+				sp.edit().putInt("gamehub_menu_hint", hintShown + 1).apply();
+			}
+		}
 		if (sp.getBoolean(PREF_KEEP_SCREEN, false)) {
 			getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 		}
@@ -193,9 +200,7 @@ public class MicroActivity extends AppCompatActivity {
 		if (vk != null) {
 			vk.setView(binding.overlayView);
 			binding.overlayView.addLayer(vk);
-			if (vk.isPhone()) {
-				orientation = ORIENTATION_PORTRAIT;
-			}
+			orientation = orientationFor(vk, orientation);
 		}
 		setOrientation(orientation);
 		menuKey = microLoader.getMenuKeyCode();
@@ -246,6 +251,13 @@ public class MicroActivity extends AppCompatActivity {
 		if (hasFocus && current instanceof Canvas) {
 			hideSystemUI();
 		}
+	}
+
+	private static int orientationFor(VirtualKeyboard vk, int fallback) {
+		if (vk == null) return fallback;
+		if (vk.isPhone()) return ORIENTATION_PORTRAIT;
+		if (vk.isLandscape()) return ORIENTATION_LANDSCAPE;
+		return fallback;
 	}
 
 	@SuppressLint("SourceLockedOrientationActivity")
@@ -526,9 +538,7 @@ public class MicroActivity extends AppCompatActivity {
 			saveLog();
 		} else if (id == R.id.action_lock_orientation) {
 			if (item.isChecked()) {
-				VirtualKeyboard vk = ContextHolder.getVk();
-				int orientation = vk != null && vk.isPhone() ? ORIENTATION_PORTRAIT : microLoader.getOrientation();
-				setOrientation(orientation);
+				setOrientation(orientationFor(ContextHolder.getVk(), microLoader.getOrientation()));
 				item.setChecked(false);
 			} else {
 				item.setChecked(true);
@@ -650,14 +660,10 @@ public class MicroActivity extends AppCompatActivity {
 		final VirtualKeyboard vk = ContextHolder.getVk();
 		AlertDialog.Builder builder = new AlertDialog.Builder(this)
 				.setTitle(R.string.layout_switch)
-				.setSingleChoiceItems(R.array.PREF_VK_TYPE_ENTRIES, vk.getLayout(), null)
+				.setSingleChoiceItems(R.array.hub_vk_type_entries, vk.getLayout(), null)
 				.setPositiveButton(android.R.string.ok, (d, w) -> {
 					vk.setLayout(((AlertDialog) d).getListView().getCheckedItemPosition());
-					if (vk.isPhone()) {
-						setOrientation(ORIENTATION_PORTRAIT);
-					} else {
-						setOrientation(microLoader.getOrientation());
-					}
+					setOrientation(orientationFor(vk, microLoader.getOrientation()));
 				});
 		builder.show();
 	}

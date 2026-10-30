@@ -39,3 +39,8 @@ captures/
 .externalNativeBuild
 .cxx
 keystore.properties
+
+# 游戏文件由 tools/prepare_games.py 生成
+app/src/main/assets/games/
+build-log.txt
+__pycache__/

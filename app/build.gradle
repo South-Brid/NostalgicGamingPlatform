@@ -12,18 +12,19 @@ android {
     namespace 'ru.playsoftware.j2meloader'
 
     defaultConfig {
-        applicationId "ru.playsoftware.j2meloader"
+        applicationId "com.gamehub.retro"
         minSdk MIN_SDK
         targetSdk TARGET_SDK
-        versionCode 101
-        versionName "1.8.2"
-        resValue 'string', 'app_name', rootProject.name
+        versionCode 3
+        versionName "1.1.1"
+        resValue 'string', 'app_name', '怀旧游戏厅'
         vectorDrawables.useSupportLibrary = true
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     androidResources {
         generateLocaleConfig true
+        noCompress 'jar'
     }
 
     signingConfigs {
@@ -136,7 +137,7 @@ androidComponents {
         if (variant.buildType == 'debug' && variant.flavorName != 'midlet') {
             variant.resValues.put(
                     variant.makeResValueKey('string', 'app_name'),
-                    new ResValue('JL-Debug', null))
+                    new ResValue('怀旧游戏厅', null))
         }
         def baseName = variant.flavorName == 'midlet' ? "${midletArchivesBaseName}-" : "${rootProject.name}-"
         variant.outputs.each { output ->

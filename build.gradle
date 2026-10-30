@@ -12,5 +12,5 @@ ext {
     COMPILE_SDK = 37
     MIN_SDK = 21
     TARGET_SDK = 36
-    NDK_VERSION = '29.0.14206865'
+    NDK_VERSION = '30.0.16248370'
 }

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="hub_bg">#12131C</color>
+    <color name="hub_header_top">#1E1B3A</color>
+    <color name="hub_surface">#1E2031</color>
+    <color name="hub_surface_high">#272A3F</color>
+    <color name="hub_stroke">#33364F</color>
+    <color name="hub_accent">#FFC24B</color>
+    <color name="hub_accent_dark">#E89A1C</color>
+    <color name="hub_on_accent">#1A1408</color>
+    <color name="hub_text">#F2F3F8</color>
+    <color name="hub_text_secondary">#9AA0B8</color>
+    <color name="hub_ready">#4ADE80</color>
+</resources>

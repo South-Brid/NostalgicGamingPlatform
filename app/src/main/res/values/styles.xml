@@ -104,4 +104,44 @@
     <style name="TextViewVendor" parent="Widget.AppCompat.TextView" >
     </style>
 
+    <style name="HubDialog" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="colorAccent">@color/hub_accent</item>
+        <item name="android:windowBackground">@drawable/bg_hub_dialog_window</item>
+        <item name="android:textColorPrimary">@color/hub_text</item>
+        <item name="android:textColorSecondary">@color/hub_text_secondary</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+    </style>
+
+    <style name="HubStatNumber">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/hub_accent</item>
+        <item name="android:textSize">24sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="HubStatLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">2dp</item>
+        <item name="android:textColor">#C9C3E8</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+
+    <style name="HubPageTitle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:paddingStart">20dp</item>
+        <item name="android:paddingTop">16dp</item>
+        <item name="android:paddingEnd">20dp</item>
+        <item name="android:paddingBottom">10dp</item>
+        <item name="android:textColor">@color/hub_text</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="HubDialog.Bare">
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+
 </resources>
