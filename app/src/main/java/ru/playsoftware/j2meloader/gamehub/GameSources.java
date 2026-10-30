@@ -16,6 +16,7 @@ import net.lingala.zip4j.model.LocalFileHeader;
 
 import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FilterInputStream;
 import java.io.IOException;
@@ -136,6 +137,7 @@ final class GameSources {
 			e.name = g.name.trim();
 			e.category = g.category != null && !g.category.isEmpty() ? g.category : GameCategorizer.classify(e.name);
 			e.url = resolve(sourceUrl, g.url);
+			e.platform = e.url.toLowerCase().endsWith(".mrp") ? GameEntry.PLATFORM_MRP : GameEntry.PLATFORM_JAVA;
 			e.size = g.size;
 			File icon = new File(icons, e.id + ".png");
 			e.iconFile = icon.getPath();
@@ -175,14 +177,14 @@ final class GameSources {
 		private int lastPercent = -1;
 		private int unsaved;
 
-		Importer(Context context, Set<String> existingNames, ImportListener listener, AtomicBoolean cancelled) {
+		Importer(Context context, Set<String> existingKeys, ImportListener listener, AtomicBoolean cancelled) {
 			this.context = context;
 			this.listener = listener;
 			this.cancelled = cancelled;
 			this.local = loadLocal(context);
-			for (String n : existingNames) names.add(normalize(n));
+			names.addAll(existingKeys);
 			for (GameEntry g : local) {
-				names.add(normalize(g.name));
+				names.add(GameEntry.dedupKey(g.platform, g.name));
 				if (g.hash != null) hashes.add(g.hash);
 			}
 			localDir = dir(context, "local");
@@ -203,7 +205,7 @@ final class GameSources {
 						if (lower.endsWith(".zip")) {
 							importZip(counter);
 						} else {
-							importJar(counter, GameCategorizer.cleanName(stripExt(name)), null);
+							importGame(counter, GameCategorizer.cleanName(stripExt(name)), null, lower.endsWith(".mrp"));
 						}
 					}
 					doneBytes += counter.count;
@@ -224,16 +226,16 @@ final class GameSources {
 				if (header.isDirectory()) continue;
 				String path = decodeName(header);
 				String lower = path.toLowerCase();
-				if (lower.endsWith(".jar")) {
+				if (lower.endsWith(".jar") || lower.endsWith(".mrp")) {
 					String name = GameCategorizer.cleanName(stripExt(baseName(path)));
-					importJar(zip, name, categoryFor(name, path));
+					importGame(zip, name, path, lower.endsWith(".mrp"));
 				} else if (lower.endsWith(".zip")) {
 					importZip(new NonClosingInputStream(zip));
 				}
 			}
 		}
 
-		private void importJar(InputStream in, String name, String category) throws IOException {
+		private void importGame(InputStream in, String name, String path, boolean mrp) throws IOException {
 			MessageDigest digest = md5Digest();
 			try (OutputStream out = new FileOutputStream(tmp)) {
 				byte[] buf = new byte[32 * 1024];
@@ -243,13 +245,25 @@ final class GameSources {
 					digest.update(buf, 0, n);
 				}
 			}
+			byte[] icon = null;
+			if (mrp) {
+				String title = readMrpTitle(tmp);
+				if (title == null) {
+					result.invalid++;
+					report(name);
+					return;
+				}
+				if (!title.isEmpty()) name = title;
+			}
+			String platform = mrp ? GameEntry.PLATFORM_MRP : GameEntry.PLATFORM_JAVA;
 			String hash = String.format("%032x", new BigInteger(1, digest.digest()));
-			String key = normalize(name);
+			String key = GameEntry.dedupKey(platform, name);
 			GameEntry sameFile = null;
 			if (hashes.contains(hash)) {
 				for (GameEntry g : local) if (hash.equals(g.hash)) sameFile = g;
 			}
-			if (names.contains(key) || (hashes.contains(hash) && (sameFile == null || normalize(sameFile.name).equals(key)))) {
+			if (names.contains(key) || (hashes.contains(hash)
+					&& (sameFile == null || GameEntry.dedupKey(sameFile.platform, sameFile.name).equals(key)))) {
 				result.duplicates++;
 				report(name);
 				return;
@@ -257,25 +271,27 @@ final class GameSources {
 			if (sameFile != null) {
 				removeGameFiles(sameFile);
 				local.remove(sameFile);
-				names.remove(normalize(sameFile.name));
+				names.remove(GameEntry.dedupKey(sameFile.platform, sameFile.name));
 				result.repaired++;
 			}
-			byte[] icon;
-			try {
-				icon = readMidlet(tmp);
-			} catch (IOException e) {
-				result.invalid++;
-				report(name);
-				return;
+			if (!mrp) {
+				try {
+					icon = readMidlet(tmp);
+				} catch (IOException e) {
+					result.invalid++;
+					report(name);
+					return;
+				}
 			}
-			String id = md5(name).substring(0, 12);
+			String id = md5(mrp ? "mrp:" + name : name).substring(0, 12);
 			removeById(local, id);
-			File jar = new File(localDir, id + ".jar");
+			File jar = new File(localDir, id + (mrp ? ".mrp" : ".jar"));
 			if (!tmp.renameTo(jar)) FileUtils.copyFileUsingChannel(tmp, jar);
 			GameEntry e = new GameEntry();
 			e.id = id;
 			e.name = name;
-			e.category = category != null ? category : GameCategorizer.classify(name);
+			e.platform = platform;
+			e.category = path != null ? categoryFor(name, path) : GameCategorizer.classify(name);
 			e.source = GameEntry.SOURCE_LOCAL;
 			e.url = jar.getPath();
 			e.size = jar.length();
@@ -467,6 +483,21 @@ final class GameSources {
 		return slash >= 0 ? last.substring(slash + 1) : last;
 	}
 
+	static String readMrpTitle(File file) {
+		byte[] head = new byte[0x34];
+		try (InputStream in = new FileInputStream(file)) {
+			if (in.read(head) != head.length) return null;
+		} catch (IOException e) {
+			return null;
+		}
+		if (head[0] != 'M' || head[1] != 'R' || head[2] != 'P' || head[3] != 'G') return null;
+		int end = 0x1C;
+		while (end < head.length && head[end] != 0) end++;
+		String title = new String(head, 0x1C, end - 0x1C, Charset.forName("GBK"))
+				.replaceAll("[\\p{Cntrl}\\uFFFD]", "").trim();
+		return GameCategorizer.cleanName(title);
+	}
+
 	/** Validates a MIDlet jar and returns its icon (PNG bytes) or null */
 	private static byte[] readMidlet(File jar) throws IOException {
 		try (ZipFile zip = new ZipFile(jar)) {
@@ -572,9 +603,9 @@ final class GameSources {
 	}
 
 
-	private static File jarFile(Context context, GameEntry game) {
+	static File jarFile(Context context, GameEntry game) {
 		if (game.source == GameEntry.SOURCE_LOCAL) return new File(game.url);
-		return new File(dir(context, "remote"), game.id + ".jar");
+		return new File(dir(context, "remote"), game.id + (game.isMrp() ? ".mrp" : ".jar"));
 	}
 
 	/**

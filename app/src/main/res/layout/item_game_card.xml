@@ -41,6 +41,22 @@
                 tools:text="七" />
         </FrameLayout>
 
+        <TextView
+            android:id="@+id/platform"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_marginStart="-3dp"
+            android:layout_marginBottom="-3dp"
+            android:elevation="4dp"
+            android:paddingHorizontal="5dp"
+            android:paddingVertical="1dp"
+            android:textColor="#FFFFFF"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            tools:background="@drawable/bg_hub_tag_mrp"
+            tools:text="MRP" />
+
         <View
             android:id="@+id/ready"
             android:layout_width="14dp"

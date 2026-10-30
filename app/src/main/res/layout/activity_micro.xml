@@ -5,6 +5,7 @@
     android:id="@+id/midletFrame"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@android:color/black"
     tools:context="javax.microedition.shell.MicroActivity">
 
     <LinearLayout
@@ -41,5 +42,9 @@
         android:id="@+id/overlay_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
+
+    <include
+        android:id="@+id/launch_overlay"
+        layout="@layout/view_game_launch" />
 
 </FrameLayout>

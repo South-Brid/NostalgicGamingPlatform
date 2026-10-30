@@ -28,12 +28,17 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.content.res.TypedArray;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.TextUtils;
@@ -50,6 +55,7 @@ import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -94,6 +100,7 @@ import ru.playsoftware.j2meloader.BuildConfig;
 import ru.playsoftware.j2meloader.R;
 import ru.playsoftware.j2meloader.config.Config;
 import ru.playsoftware.j2meloader.databinding.ActivityMicroBinding;
+import ru.playsoftware.j2meloader.gamehub.KeyboardStyles;
 import ru.playsoftware.j2meloader.util.Constants;
 import ru.playsoftware.j2meloader.util.LogUtils;
 
@@ -116,6 +123,9 @@ public class MicroActivity extends AppCompatActivity {
 	private int toolbarHeight;
 	private int menuKey;
 	private String appPath;
+	private long launchShownAt;
+	private boolean exiting;
+	private final Runnable hideLaunch = this::hideLaunchOverlay;
 
 	public ActivityMicroBinding binding;
 
@@ -140,13 +150,7 @@ public class MicroActivity extends AppCompatActivity {
 		cutoutsEnabled = sp.getBoolean(PREF_ADD_CUTOUT_AREA, false) &&
 				Build.VERSION.SDK_INT >= Build.VERSION_CODES.P;
 		setupInsets();
-		if (!actionBarEnabled) {
-			int hintShown = sp.getInt("gamehub_menu_hint", 0);
-			if (hintShown < 3) {
-				Toast.makeText(this, "按手机「返回键」打开游戏菜单（切换键盘、退出等）\n长按返回键直接退出游戏", Toast.LENGTH_LONG).show();
-				sp.edit().putInt("gamehub_menu_hint", hintShown + 1).apply();
-			}
-		}
+		binding.launchOverlay.tip.setVisibility(actionBarEnabled ? View.GONE : View.VISIBLE);
 		if (sp.getBoolean(PREF_KEEP_SCREEN, false)) {
 			getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 		}
@@ -169,6 +173,7 @@ public class MicroActivity extends AppCompatActivity {
 				throw new RuntimeException("Can't access file system");
 			}
 		}
+		showLaunchOverlay();
 		String arguments = intent.getStringExtra(KEY_START_ARGUMENTS);
 		if (arguments != null) {
 			MidletSystem.setProperty("com.nokia.mid.cmdline", arguments);
@@ -212,6 +217,67 @@ public class MicroActivity extends AppCompatActivity {
 			e.printStackTrace();
 			showErrorDialog(e.toString());
 		}
+	}
+
+	private void showLaunchOverlay() {
+		String name = appName != null ? appName : "";
+		binding.launchOverlay.name.setText(name);
+		Bitmap icon = appPath != null ? BitmapFactory.decodeFile(appPath + Config.MIDLET_ICON_FILE) : null;
+		if (icon != null) {
+			BitmapDrawable drawable = new BitmapDrawable(getResources(), icon);
+			drawable.setFilterBitmap(false);
+			binding.launchOverlay.icon.setImageDrawable(drawable);
+		} else if (!name.isEmpty()) {
+			binding.launchOverlay.icon.setVisibility(View.GONE);
+			TextView letter = binding.launchOverlay.letter;
+			letter.setVisibility(View.VISIBLE);
+			letter.setText(name.substring(0, 1));
+			GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+					new int[]{0xFFFFC24B, 0xFFE8731C});
+			bg.setCornerRadius(20 * getResources().getDisplayMetrics().density);
+			letter.setBackground(bg);
+		}
+		View content = binding.launchOverlay.content;
+		content.setAlpha(0f);
+		content.setTranslationY(24 * getResources().getDisplayMetrics().density);
+		content.animate().alpha(1f).translationY(0).setDuration(320).setStartDelay(80).start();
+		launchShownAt = SystemClock.uptimeMillis();
+		Canvas.setFirstFrameListener(() -> runOnUiThread(this::scheduleHideLaunch));
+		binding.getRoot().postDelayed(hideLaunch, 12000);
+	}
+
+	private void scheduleHideLaunch() {
+		if (binding == null) return;
+		long wait = Math.max(200, 900 - (SystemClock.uptimeMillis() - launchShownAt));
+		binding.getRoot().removeCallbacks(hideLaunch);
+		binding.getRoot().postDelayed(hideLaunch, wait);
+	}
+
+	private void hideLaunchOverlay() {
+		View overlay = binding.launchOverlay.getRoot();
+		if (exiting || overlay.getVisibility() != View.VISIBLE) return;
+		Canvas.setFirstFrameListener(null);
+		overlay.animate().alpha(0f).setDuration(280).withEndAction(() -> overlay.setVisibility(View.GONE)).start();
+	}
+
+	public void showExitOverlay() {
+		exiting = true;
+		binding.getRoot().removeCallbacks(hideLaunch);
+		View overlay = binding.launchOverlay.getRoot();
+		binding.launchOverlay.status.setText("正在保存并退出…");
+		binding.launchOverlay.tip.setVisibility(View.GONE);
+		overlay.animate().cancel();
+		if (overlay.getVisibility() != View.VISIBLE) {
+			overlay.setAlpha(0f);
+			overlay.setVisibility(View.VISIBLE);
+		}
+		overlay.animate().alpha(1f).setDuration(180).start();
+	}
+
+	@Override
+	public void finish() {
+		super.finish();
+		overridePendingTransition(R.anim.hub_hold, R.anim.game_exit);
 	}
 
 	public void lockNightMode() {
@@ -411,6 +477,9 @@ public class MicroActivity extends AppCompatActivity {
 	public void setCurrent(Displayable displayable) {
 		ViewHandler.postEvent(new SetCurrentEvent(current, displayable));
 		current = displayable;
+		if (displayable != null && !(displayable instanceof Canvas)) {
+			runOnUiThread(this::scheduleHideLaunch);
+		}
 	}
 
 	public Displayable getCurrent() {
@@ -658,14 +727,11 @@ public class MicroActivity extends AppCompatActivity {
 
 	private void showSetLayoutDialog() {
 		final VirtualKeyboard vk = ContextHolder.getVk();
-		AlertDialog.Builder builder = new AlertDialog.Builder(this)
-				.setTitle(R.string.layout_switch)
-				.setSingleChoiceItems(R.array.hub_vk_type_entries, vk.getLayout(), null)
-				.setPositiveButton(android.R.string.ok, (d, w) -> {
-					vk.setLayout(((AlertDialog) d).getListView().getCheckedItemPosition());
-					setOrientation(orientationFor(vk, microLoader.getOrientation()));
-				});
-		builder.show();
+		KeyboardStyles.pick(this, getString(R.string.layout_switch), "只对这个游戏生效", vk.getLayout(), type -> {
+			vk.setLayout(type);
+			setOrientation(orientationFor(vk, microLoader.getOrientation()));
+			Toast.makeText(this, "已切换为「" + KeyboardStyles.title(type) + "」", Toast.LENGTH_SHORT).show();
+		});
 	}
 
 	private void showLimitFpsDialog() {

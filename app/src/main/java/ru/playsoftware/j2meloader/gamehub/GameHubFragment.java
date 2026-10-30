@@ -35,6 +35,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.preference.PreferenceManager;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -45,6 +46,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -62,7 +64,9 @@ import ru.playsoftware.j2meloader.databinding.DialogImportProgressBinding;
 import ru.playsoftware.j2meloader.databinding.FragmentGameHubBinding;
 import ru.playsoftware.j2meloader.databinding.ItemHubNavBinding;
 import ru.playsoftware.j2meloader.databinding.ItemHubSideBinding;
+import ru.playsoftware.j2meloader.databinding.ViewPlatformFilterBinding;
 import ru.playsoftware.j2meloader.info.AboutDialogFragment;
+import ru.playsoftware.j2meloader.mrp.MrpRuntime;
 import ru.playsoftware.j2meloader.settings.SettingsActivity;
 import ru.playsoftware.j2meloader.util.FileUtils;
 
@@ -71,6 +75,7 @@ public class GameHubFragment extends Fragment implements GameAdapter.Listener {
 	private static final int TAB_CATEGORY = 1;
 	private static final int TAB_SEARCH = 2;
 	private static final int TAB_MINE = 3;
+	private static final String PREF_PLATFORM = "gamehub_platform";
 
 	private final CompositeDisposable disposables = new CompositeDisposable();
 	private final GameAdapter homeAdapter = new GameAdapter(this);
@@ -90,8 +95,10 @@ public class GameHubFragment extends Fragment implements GameAdapter.Listener {
 
 	private FragmentGameHubBinding binding;
 	private AppRepository appRepository;
+	private List<GameEntry> allGames = Collections.emptyList();
 	private List<GameEntry> games = Collections.emptyList();
 	private List<String> categories = Collections.emptyList();
+	private String platform;
 	private Set<String> installed = new HashSet<>();
 	private int tab = TAB_HOME;
 	private String category;
@@ -124,6 +131,12 @@ public class GameHubFragment extends Fragment implements GameAdapter.Listener {
 		setupNav(binding.navCategory, R.drawable.ic_nav_category, "分类", TAB_CATEGORY);
 		setupNav(binding.navSearch, R.drawable.ic_nav_search, "搜索", TAB_SEARCH);
 		setupNav(binding.navMine, R.drawable.ic_nav_mine, "我的", TAB_MINE);
+		platform = PreferenceManager.getDefaultSharedPreferences(requireContext())
+				.getString(PREF_PLATFORM, GameEntry.PLATFORM_JAVA);
+		for (ViewPlatformFilterBinding f : filters()) {
+			f.chipJava.setOnClickListener(v -> setPlatform(GameEntry.PLATFORM_JAVA));
+			f.chipMrp.setOnClickListener(v -> setPlatform(GameEntry.PLATFORM_MRP));
+		}
 
 		binding.search.addTextChangedListener(new TextWatcher() {
 			@Override
@@ -245,7 +258,8 @@ public class GameHubFragment extends Fragment implements GameAdapter.Listener {
 	}
 
 	private void refreshInstalled() {
-		disposables.add(Single.fromCallable(GameLibrary::installedIds)
+		Context context = requireContext().getApplicationContext();
+		disposables.add(Single.fromCallable(() -> GameLibrary.installedIds(context))
 				.subscribeOn(Schedulers.io())
 				.observeOn(AndroidSchedulers.mainThread())
 				.subscribe(ids -> {
@@ -257,9 +271,56 @@ public class GameHubFragment extends Fragment implements GameAdapter.Listener {
 
 	private void onGamesLoaded(List<GameEntry> list) {
 		if (binding == null) return;
-		games = list;
+		allGames = list;
 		byId.clear();
 		for (GameEntry g : list) byId.put(g.id, g);
+		applyPlatform();
+		refreshInstalled();
+	}
+
+	private ViewPlatformFilterBinding[] filters() {
+		return new ViewPlatformFilterBinding[]{binding.filterHome, binding.filterCategory, binding.filterSearch};
+	}
+
+	private void setPlatform(String p) {
+		if (Objects.equals(platform, p)) return;
+		platform = p;
+		PreferenceManager.getDefaultSharedPreferences(requireContext()).edit().putString(PREF_PLATFORM, p).apply();
+		category = null;
+		applyPlatform();
+		RecyclerView[] lists = {binding.homeList, binding.categoryList, binding.searchList, binding.mineList};
+		for (RecyclerView l : lists) l.scrollToPosition(0);
+	}
+
+	private boolean isMrpHall() {
+		return GameEntry.PLATFORM_MRP.equals(platform);
+	}
+
+	private String hallName() {
+		return isMrpHall() ? "MRP" : "Java";
+	}
+
+	private boolean visible(GameEntry g) {
+		return platform.equals(g.platformKey());
+	}
+
+	private void applyPlatform() {
+		int mrp = 0;
+		for (GameEntry g : allGames) if (g.isMrp()) mrp++;
+		List<GameEntry> list = new ArrayList<>();
+		for (GameEntry g : allGames) if (visible(g)) list.add(g);
+		games = list;
+		for (ViewPlatformFilterBinding f : filters()) {
+			f.chipJava.setSelected(!isMrpHall());
+			f.chipMrp.setSelected(isMrpHall());
+			f.chipJavaCount.setText((allGames.size() - mrp) + " 款");
+			f.chipMrpCount.setText(mrp + " 款");
+		}
+		binding.homeEmptyTitle.setText(isMrpHall() ? "MRP 游戏厅还是空的" : "Java 游戏厅还是空的");
+		binding.homeEmptyDesc.setText(isMrpHall()
+				? "MRP 是斯凯「冒泡」平台的手机游戏（.mrp 文件）。\n把 MRP 游戏包（zip）或 mrp 文件拷到手机里，\n点下面的按钮选择它，支持多选。"
+				: "把 Java 游戏包（zip）拷到手机里，点下面的按钮选择它，\n游戏会自动识别、分类、放进游戏厅。\n也可以直接选 jar 文件，支持多选。");
+		binding.homeImport.setText(isMrpHall() ? "导入 MRP 游戏包" : "导入 Java 游戏包");
 		categories = new ArrayList<>(GameLibrary.categories(list));
 		categories.remove(GameLibrary.ALL);
 		if (category == null || !categories.contains(category)) {
@@ -267,12 +328,21 @@ public class GameHubFragment extends Fragment implements GameAdapter.Listener {
 		}
 		buildSideList();
 		renderAll();
-		refreshInstalled();
+	}
+
+	private int playedCount() {
+		int n = 0;
+		for (GameEntry g : games) if (installed.contains(g.id)) n++;
+		return n;
+	}
+
+	private String subtitle() {
+		return games.size() + " 款经典 " + hallName() + " 手机游戏 · 已玩过 " + playedCount() + " 款";
 	}
 
 	private void renderAll() {
 		if (binding == null) return;
-		binding.homeSubtitle.setText(games.size() + " 款经典 Java 手机游戏 · 已玩过 " + installed.size() + " 款");
+		binding.homeSubtitle.setText(subtitle());
 		renderHome();
 		renderCategory();
 		renderSearch();
@@ -301,7 +371,7 @@ public class GameHubFragment extends Fragment implements GameAdapter.Listener {
 		List<GameEntry> recent = new ArrayList<>();
 		for (String id : GameLibrary.recentIds(requireContext())) {
 			GameEntry g = byId.get(id);
-			if (g != null) recent.add(g);
+			if (g != null && visible(g)) recent.add(g);
 		}
 		if (!recent.isEmpty()) {
 			items.add(new GameAdapter.Section("继续游戏", ""));
@@ -379,15 +449,17 @@ public class GameHubFragment extends Fragment implements GameAdapter.Listener {
 	private void renderMine() {
 		Context context = requireContext();
 		List<Object> items = new ArrayList<>();
-		items.add(new GameAdapter.Stats(games.size(), installed.size(), categories.size()));
+		items.add(new GameAdapter.Stats(games.size(), playedCount(), categories.size()));
 		items.add(new GameAdapter.Section("添加游戏", ""));
-		items.add(new GameAdapter.Menu(R.drawable.ic_hub_folder, "导入游戏包", "选择 zip 游戏包或 jar 文件，支持多选",
+		items.add(new GameAdapter.Menu(R.drawable.ic_hub_folder, "导入游戏包",
+				isMrpHall() ? "选择 MRP 游戏包（zip）或 mrp 文件，支持多选" : "选择 Java 游戏包（zip）或 jar 文件，支持多选",
 				"", this::importLocal));
 		items.add(new GameAdapter.Menu(R.drawable.ic_nav_category, "游戏源", "添加别人分享的游戏清单网址",
 				GameSources.getSources(context).size() + " 个", this::showSources));
-		items.add(new GameAdapter.Section("设置", ""));
-		items.add(new GameAdapter.Menu(R.drawable.ic_hub_keyboard, "默认键盘样式", "所有游戏的虚拟键盘布局",
-				KeyboardStyles.shortName(KeyboardStyles.getDefault(context)), this::pickDefaultKeyboard));
+		items.add(new GameAdapter.Section(hallName() + " 游戏设置", ""));
+		int keyboard = isMrpHall() ? KeyboardStyles.getMrpDefault(context) : KeyboardStyles.getDefault(context);
+		items.add(new GameAdapter.Menu(R.drawable.ic_hub_keyboard, hallName() + " 默认键盘样式",
+				"所有 " + hallName() + " 游戏的虚拟键盘布局", KeyboardStyles.shortName(keyboard), this::pickDefaultKeyboard));
 		items.add(new GameAdapter.Menu(R.drawable.ic_hub_settings, "模拟器设置", "声音、振动、屏幕常亮等", "",
 				() -> startActivity(new Intent(requireActivity(), SettingsActivity.class))));
 		items.add(new GameAdapter.Menu(R.drawable.ic_hub_info, "关于", "基于开源项目 J2ME Loader", "",
@@ -404,14 +476,16 @@ public class GameHubFragment extends Fragment implements GameAdapter.Listener {
 	@Override
 	public void onGameClick(GameEntry game) {
 		hideKeyboard();
-		if (installed.contains(game.id)) {
+		boolean mrpReady = game.isMrp() && GameSources.jarFile(requireContext(), game).isFile();
+		if (installed.contains(game.id) || mrpReady) {
 			GameLauncher.start(requireContext(), game, false);
 			return;
 		}
 		DialogGameLoadingBinding loading = DialogGameLoadingBinding.inflate(getLayoutInflater());
 		GameIcons.bind(loading.icon, loading.letter, game);
 		loading.name.setText(game.name);
-		loading.category.setText(game.category + " · 键盘样式：" + KeyboardStyles.shortName(GameLauncher.getKeyboard(requireContext(), game)));
+		loading.category.setText(game.isMrp() ? game.category + " · MRP 游戏"
+				: game.category + " · 键盘样式：" + KeyboardStyles.shortName(GameLauncher.getKeyboard(requireContext(), game)));
 		AlertDialog dialog = new AlertDialog.Builder(requireContext(), R.style.HubDialog_Bare)
 				.setView(loading.getRoot())
 				.setCancelable(false)
@@ -441,6 +515,30 @@ public class GameHubFragment extends Fragment implements GameAdapter.Listener {
 	@Override
 	public void onGameLongClick(GameEntry game) {
 		Context context = requireContext();
+		if (game.isMrp()) {
+			int mrpKeyboard = GameLauncher.getKeyboard(context, game);
+			List<String> options = new ArrayList<>();
+			options.add("▶  开始游戏");
+			options.add("⌨  键盘样式：" + KeyboardStyles.shortName(mrpKeyboard));
+			if (!game.isBuiltin()) options.add("🗑  删除这个游戏");
+			new AlertDialog.Builder(context, R.style.HubDialog)
+					.setTitle(game.name + "（MRP）")
+					.setItems(options.toArray(new String[0]), (d, which) -> {
+						if (which == 0) {
+							onGameClick(game);
+						} else if (which == 1) {
+							KeyboardStyles.pick(context, "「" + game.name + "」的键盘样式", "只对这个游戏生效", mrpKeyboard, true,
+									type -> {
+										GameLauncher.setKeyboard(context, game, type);
+										Toast.makeText(context, "已切换为「" + KeyboardStyles.title(type) + "」", Toast.LENGTH_SHORT).show();
+									});
+						} else {
+							confirmDelete(game);
+						}
+					})
+					.show();
+			return;
+		}
 		int keyboard = GameLauncher.getKeyboard(context, game);
 		List<String> options = new ArrayList<>();
 		options.add("▶  开始游戏");
@@ -477,7 +575,7 @@ public class GameHubFragment extends Fragment implements GameAdapter.Listener {
 				.setMessage(message)
 				.setNegativeButton("取消", null)
 				.setPositiveButton("删除", (d, w) -> disposables.add(Completable.fromAction(() -> {
-							GameLauncher.uninstall(game);
+							GameLauncher.uninstall(context, game);
 							GameSources.deleteGame(context, game);
 						})
 						.subscribeOn(Schedulers.io())
@@ -528,7 +626,7 @@ public class GameHubFragment extends Fragment implements GameAdapter.Listener {
 			view.action.setText("正在停止…");
 		});
 		Set<String> existing = new HashSet<>();
-		for (GameEntry g : games) existing.add(g.name);
+		for (GameEntry g : allGames) existing.add(GameEntry.dedupKey(g.platform, g.name));
 		Handler main = new Handler(Looper.getMainLooper());
 		GameSources.ImportListener listener = (percent, r, current) -> {
 			int imported = r.imported, duplicates = r.duplicates, invalid = r.invalid;
@@ -708,7 +806,18 @@ public class GameHubFragment extends Fragment implements GameAdapter.Listener {
 
 	private void pickDefaultKeyboard() {
 		Context context = requireContext();
-		KeyboardStyles.pick(context, "默认键盘样式", "应用到所有游戏，单个游戏可长按单独设置",
+		if (isMrpHall()) {
+			KeyboardStyles.pick(context, "MRP 默认键盘样式", "应用到所有 MRP 游戏，单个游戏可长按单独设置",
+					KeyboardStyles.getMrpDefault(context), true, type -> {
+						KeyboardStyles.setMrpDefault(context, type);
+						MrpRuntime.clearKeyboards(context);
+						renderMine();
+						Toast.makeText(context, "所有 MRP 游戏已切换为「" + KeyboardStyles.title(type) + "」",
+								Toast.LENGTH_SHORT).show();
+					});
+			return;
+		}
+		KeyboardStyles.pick(context, "Java 默认键盘样式", "应用到所有 Java 游戏，单个游戏可长按单独设置",
 				KeyboardStyles.getDefault(context), type -> {
 					KeyboardStyles.setDefault(context, type);
 					renderMine();

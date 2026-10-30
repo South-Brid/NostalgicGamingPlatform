@@ -125,6 +125,7 @@ public abstract class Canvas extends Displayable {
 	private static int graphicsMode;
 	private static ShaderInfo shaderFilter;
 	private static boolean parallelRedraw;
+	private static volatile Runnable firstFrameListener;
 	private static boolean forceFullscreen;
 	private static boolean showFps;
 	private static int backgroundColor;
@@ -1247,7 +1248,16 @@ public abstract class Canvas extends Displayable {
 
 	}
 
+	public static void setFirstFrameListener(Runnable listener) {
+		firstFrameListener = listener;
+	}
+
 	private void requestFlushToScreen() {
+		Runnable listener = firstFrameListener;
+		if (listener != null) {
+			firstFrameListener = null;
+			listener.run();
+		}
 		if (graphicsMode == 1) {
 			if (innerView != null) {
 				renderer.requestRender();

@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Set;
 
 import ru.playsoftware.j2meloader.config.Config;
+import ru.playsoftware.j2meloader.mrp.MrpRuntime;
 
 final class GameLibrary {
 	static final String ALL = "全部";
@@ -89,13 +90,17 @@ final class GameLibrary {
 				.putString(PREF_RECENT, TextUtils.join(",", ids)).apply();
 	}
 
-	static Set<String> installedIds() {
+	static Set<String> installedIds(Context context) {
 		Set<String> ids = new HashSet<>();
 		File[] dirs = new File(Config.getAppDir()).listFiles();
 		if (dirs != null) {
 			for (File d : dirs) {
 				if (new File(d, Config.MIDLET_DEX_FILE).isFile()) ids.add(d.getName());
 			}
+		}
+		File[] mrps = new File(MrpRuntime.root(context), "mythroad").listFiles((d, n) -> n.endsWith(".mrp"));
+		if (mrps != null) {
+			for (File f : mrps) ids.add(f.getName().substring(0, f.getName().length() - 4));
 		}
 		return ids;
 	}

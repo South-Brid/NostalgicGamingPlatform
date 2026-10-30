@@ -37,7 +37,7 @@ import java.util.Stack;
 import ru.playsoftware.j2meloader.R;
 
 public class FilteredFilePickerFragment extends FilePickerFragment {
-	private static final List<String> extList = Arrays.asList(".jad", ".jar", ".kjx");
+	private static final List<String> extList = Arrays.asList(".jad", ".jar", ".kjx", ".zip", ".mrp");
 	private static final Stack<File> history = new Stack<>();
 
 	@Override

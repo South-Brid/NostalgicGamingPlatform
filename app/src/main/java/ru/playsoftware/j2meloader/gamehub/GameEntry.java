@@ -4,6 +4,8 @@ public class GameEntry {
 	static final int SOURCE_BUILTIN = 0;
 	static final int SOURCE_LOCAL = 1;
 	static final int SOURCE_REMOTE = 2;
+	static final String PLATFORM_JAVA = "java";
+	static final String PLATFORM_MRP = "mrp";
 
 	public String id;
 	public String name;
@@ -15,6 +17,7 @@ public class GameEntry {
 	public String sourceUrl;
 	public long size;
 	public String hash;
+	public String platform;
 	transient String pinyin = "";
 	transient String initials = "";
 
@@ -25,5 +28,17 @@ public class GameEntry {
 
 	boolean isBuiltin() {
 		return source == SOURCE_BUILTIN;
+	}
+
+	boolean isMrp() {
+		return PLATFORM_MRP.equals(platform);
+	}
+
+	String platformKey() {
+		return isMrp() ? PLATFORM_MRP : PLATFORM_JAVA;
+	}
+
+	static String dedupKey(String platform, String name) {
+		return (PLATFORM_MRP.equals(platform) ? "mrp:" : "") + GameSources.normalize(name);
 	}
 }

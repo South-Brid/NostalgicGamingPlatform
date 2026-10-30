@@ -125,9 +125,15 @@
         <activity
             android:name="javax.microedition.shell.MicroActivity"
             android:exported="false"
-            android:theme="@style/AppTheme.NoActionBar"
+            android:theme="@style/AppTheme.NoActionBar.Game"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
             android:process=":midlet" />
+        <activity
+            android:name=".mrp.MrpActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme.NoActionBar.Game"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:process=":mrp" />
         <activity android:name=".settings.SettingsActivity"
             android:exported="false">
             <intent-filter>

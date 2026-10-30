@@ -2,6 +2,7 @@ package ru.playsoftware.j2meloader.gamehub;
 
 import static ru.playsoftware.j2meloader.util.Constants.PREF_DEFAULT_PROFILE;
 
+import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
 
@@ -15,10 +16,13 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.List;
 
+import ru.playsoftware.j2meloader.R;
 import ru.playsoftware.j2meloader.appsdb.AppRepository;
 import ru.playsoftware.j2meloader.config.Config;
 import ru.playsoftware.j2meloader.config.ProfileModel;
 import ru.playsoftware.j2meloader.config.ProfilesManager;
+import ru.playsoftware.j2meloader.mrp.MrpActivity;
+import ru.playsoftware.j2meloader.mrp.MrpRuntime;
 import ru.playsoftware.j2meloader.util.FileUtils;
 import ru.woesss.j2me.installer.AppInstaller;
 
@@ -40,6 +44,7 @@ final class GameLauncher {
 	static void install(Application app, AppRepository repository, GameEntry game,
 						Consumer<Integer> downloadProgress) throws IOException {
 		File jar = GameSources.obtainJar(app, game, downloadProgress);
+		if (game.isMrp()) return;
 		try {
 			new AppInstaller(-1, app, repository).installLocalJar(jar, game.id, game.name);
 		} finally {
@@ -50,15 +55,33 @@ final class GameLauncher {
 		}
 	}
 
-	static void uninstall(GameEntry game) {
+	static File mrpInstalledFile(Context context, GameEntry game) {
+		return new File(new File(MrpRuntime.root(context), "mythroad"), game.id + ".mrp");
+	}
+
+	static void uninstall(Context context, GameEntry game) {
+		if (game.isMrp()) {
+			//noinspection ResultOfMethodCallIgnored
+			mrpInstalledFile(context, game).delete();
+			return;
+		}
 		FileUtils.deleteDirectory(appDir(game));
 		FileUtils.deleteDirectory(configDir(game));
 	}
 
 	static void start(Context context, GameEntry game, boolean showSettings) {
-		ensureConfig(context, game);
 		GameLibrary.addRecent(context, game.id);
-		Config.startApp(context, game.name, appDir(game).getPath(), showSettings);
+		if (game.isMrp()) {
+			String icon = game.icon ? game.iconFile : null;
+			context.startActivity(MrpActivity.intent(context, GameSources.jarFile(context, game).getPath(),
+					game.name, game.id, icon, KeyboardStyles.getMrpDefault(context)));
+		} else {
+			ensureConfig(context, game);
+			Config.startApp(context, game.name, appDir(game).getPath(), showSettings);
+		}
+		if (!showSettings && context instanceof Activity) {
+			((Activity) context).overridePendingTransition(R.anim.game_enter, R.anim.hub_hold);
+		}
 	}
 
 	/** Create a default config so the game starts directly instead of opening the settings screen */
@@ -100,6 +123,7 @@ final class GameLauncher {
 	}
 
 	static int getKeyboard(Context context, GameEntry game) {
+		if (game.isMrp()) return MrpRuntime.getKeyboard(context, game.id, KeyboardStyles.getMrpDefault(context));
 		File configDir = configDir(game);
 		File layout = new File(configDir, Config.MIDLET_KEY_LAYOUT_FILE);
 		if (layout.isFile()) {
@@ -120,6 +144,10 @@ final class GameLauncher {
 	}
 
 	static void setKeyboard(Context context, GameEntry game, int type) {
+		if (game.isMrp()) {
+			MrpRuntime.setKeyboard(context, game.id, type);
+			return;
+		}
 		applyKeyboard(ensureConfig(context, game), type);
 	}
 

@@ -26,8 +26,8 @@ class KeyboardPreviewView extends View {
 
 	@Override
 	protected void onDraw(Canvas canvas) {
-		if (type == 7 || type == 8) {
-			drawLandscape(canvas, type == 8);
+		if (KeyboardStyles.isLandscape(type)) {
+			drawLandscape(canvas, type);
 			return;
 		}
 		float h = getHeight();
@@ -42,7 +42,7 @@ class KeyboardPreviewView extends View {
 
 		float pad = w * 0.07f;
 		float bodyL = left + pad, bodyR = left + w - pad, bodyT = pad * 1.4f, bodyB = h - pad * 1.4f;
-		boolean phone = type == 1 || type == 2;
+		boolean phone = type == 1 || type == 2 || type == KeyboardStyles.ARROWS_NUMBERS;
 		float screenB = phone ? bodyT + (bodyB - bodyT) * 0.5f : bodyB;
 		rect.set(bodyL, bodyT, bodyR, screenB);
 		paint.setShader(new LinearGradient(0, bodyT, 0, screenB, 0xFF3D4F8F, 0xFF1F7A6B, Shader.TileMode.CLAMP));
@@ -50,6 +50,15 @@ class KeyboardPreviewView extends View {
 		paint.setShader(null);
 
 		float bw = bodyR - bodyL;
+		if (type == KeyboardStyles.ARROWS_NUMBERS) {
+			float gridT = screenB + pad * 0.8f;
+			float cell = Math.min(bw / 6.4f, (bodyB - gridT) / 5f);
+			soft(canvas, bodyL, bodyR, gridT, cell);
+			float gridB = gridT + cell * 5f;
+			dpad(canvas, bodyL, gridB - cell * 0.5f, cell);
+			numbers(canvas, bodyR - cell * 3, gridB, cell);
+			return;
+		}
 		if (phone) {
 			float gridT = screenB + pad * 0.8f;
 			float cellW = bw / 3f, cellH = (bodyB - gridT) / 5f;
@@ -84,7 +93,8 @@ class KeyboardPreviewView extends View {
 		soft(canvas, bodyL, bodyR, gridB - cell * (type == 6 ? 3 : 4) - cell * 0.9f, cell);
 	}
 
-	private void drawLandscape(Canvas canvas, boolean simple) {
+	private void drawLandscape(Canvas canvas, int type) {
+		boolean simple = type == 8, split = type == 9;
 		float w = Math.min(getWidth() * 0.96f, getHeight() * 1.9f);
 		float h = w * 0.5f;
 		float left = (getWidth() - w) / 2f, top = (getHeight() - h) / 2f;
@@ -107,12 +117,13 @@ class KeyboardPreviewView extends View {
 		float cell = Math.min(gap * 0.85f / 3f, screenH / rows);
 		float gridL = screenL + screenW + (gap - cell * 3) / 2f, gridT = top + (h - cell * rows) / 2f;
 		key(canvas, gridL, gridT, cell, cell, SOFT);
-		if (simple) key(canvas, gridL + cell, gridT, cell, cell, SOFT);
+		if (simple || split) key(canvas, gridL + cell, gridT, cell, cell, SOFT);
 		key(canvas, gridL + cell * 2, gridT, cell, cell, SOFT);
 		for (int row = 1; row < rows; row++) {
 			for (int col = 0; col < 3; col++) {
 				if (simple && col == 1 && row < rows - 1) continue;
-				key(canvas, gridL + col * cell, gridT + row * cell, cell, cell, KEY);
+				key(canvas, gridL + col * cell, gridT + row * cell, cell, cell,
+						split && row == 2 && col == 1 ? FIRE : KEY);
 			}
 		}
 
@@ -121,7 +132,8 @@ class KeyboardPreviewView extends View {
 			for (int col = 0; col < 3; col++) {
 				boolean center = row == 1 && col == 1;
 				boolean cross = row == 1 || col == 1;
-				if (simple && !cross) continue;
+				if ((simple || split) && !cross) continue;
+				if (split && center) continue;
 				key(canvas, padL + col * cell, padT + row * cell, cell, cell, center ? FIRE : cross ? ARROW : 0x66FFC24B);
 			}
 		}

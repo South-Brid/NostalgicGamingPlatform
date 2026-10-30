@@ -179,6 +179,7 @@ class GameAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 		GameIcons.bind(b.icon, b.letter, game);
 		b.name.setText(game.name);
 		b.category.setText(game.category);
+		b.platform.setVisibility(View.GONE);
 		b.ready.setVisibility(installed.contains(game.id) ? View.VISIBLE : View.GONE);
 		b.getRoot().setOnClickListener(v -> listener.onGameClick(game));
 		b.getRoot().setOnLongClickListener(v -> {

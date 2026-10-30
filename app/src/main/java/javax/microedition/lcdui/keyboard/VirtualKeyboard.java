@@ -83,6 +83,9 @@ public class VirtualKeyboard implements Overlay, Runnable {
 	private static final int TYPE_ARROWS = 6;
 	private static final int TYPE_LANDSCAPE = 7;
 	private static final int TYPE_LANDSCAPE_SIMPLE = 8;
+	private static final int TYPE_LANDSCAPE_SPLIT = 9;
+	private static final float LANDSCAPE_EDGE_X = 0.06F;
+	private static final float LANDSCAPE_EDGE_Y = 0.08F;
 
 	private static final float PHONE_KEY_ROWS = 5;
 	private static final float PHONE_KEY_SCALE_X = 2.0f;
@@ -572,6 +575,40 @@ public class VirtualKeyboard implements Overlay, Runnable {
 				setSnap(KEY_C, KEY_DOWN_LEFT, RectSnap.EXT_SOUTH, false);
 				setSnap(KEY_D, KEY_DOWN_RIGHT, RectSnap.EXT_SOUTH, false);
 				break;
+			case TYPE_LANDSCAPE_SPLIT:
+				Arrays.fill(keyScales, 1);
+
+				setSnap(KEY_FIRE, SCREEN, RectSnap.INT_WEST, false);
+				setSnap(KEY_UP, KEY_FIRE, RectSnap.EXT_NORTH, true);
+				setSnap(KEY_DOWN, KEY_FIRE, RectSnap.EXT_SOUTH, true);
+				setSnap(KEY_LEFT, KEY_FIRE, RectSnap.EXT_WEST, true);
+				setSnap(KEY_RIGHT, KEY_FIRE, RectSnap.EXT_EAST, true);
+				setSnap(KEY_UP_LEFT, KEY_UP, RectSnap.EXT_WEST, false);
+				setSnap(KEY_UP_RIGHT, KEY_UP, RectSnap.EXT_EAST, false);
+				setSnap(KEY_DOWN_LEFT, KEY_DOWN, RectSnap.EXT_WEST, false);
+				setSnap(KEY_DOWN_RIGHT, KEY_DOWN, RectSnap.EXT_EAST, false);
+
+				setSnap(KEY_NUM5, SCREEN, RectSnap.INT_EAST, true);
+				setSnap(KEY_NUM4, KEY_NUM5, RectSnap.EXT_WEST, true);
+				setSnap(KEY_NUM6, KEY_NUM5, RectSnap.EXT_EAST, true);
+				setSnap(KEY_NUM2, KEY_NUM5, RectSnap.EXT_NORTH, true);
+				setSnap(KEY_NUM1, KEY_NUM2, RectSnap.EXT_WEST, true);
+				setSnap(KEY_NUM3, KEY_NUM2, RectSnap.EXT_EAST, true);
+				setSnap(KEY_NUM8, KEY_NUM5, RectSnap.EXT_SOUTH, true);
+				setSnap(KEY_NUM7, KEY_NUM8, RectSnap.EXT_WEST, true);
+				setSnap(KEY_NUM9, KEY_NUM8, RectSnap.EXT_EAST, true);
+				setSnap(KEY_NUM0, KEY_NUM8, RectSnap.EXT_SOUTH, true);
+				setSnap(KEY_STAR, KEY_NUM0, RectSnap.EXT_WEST, true);
+				setSnap(KEY_POUND, KEY_NUM0, RectSnap.EXT_EAST, true);
+				setSnap(KEY_SOFT_LEFT, KEY_NUM1, RectSnap.EXT_NORTH, true);
+				setSnap(KEY_MENU, KEY_NUM2, RectSnap.EXT_NORTH, true);
+				setSnap(KEY_SOFT_RIGHT, KEY_NUM3, RectSnap.EXT_NORTH, true);
+
+				setSnap(KEY_A, KEY_UP_LEFT, RectSnap.EXT_NORTH, false);
+				setSnap(KEY_B, KEY_UP_RIGHT, RectSnap.EXT_NORTH, false);
+				setSnap(KEY_C, KEY_DOWN_LEFT, RectSnap.EXT_SOUTH, false);
+				setSnap(KEY_D, KEY_DOWN_RIGHT, RectSnap.EXT_SOUTH, false);
+				break;
 		}
 	}
 
@@ -580,17 +617,21 @@ public class VirtualKeyboard implements Overlay, Runnable {
 		if (!isLandscape() || screen == null) return;
 		float leftGap = Math.max(0, virtualScreen.left - screen.left);
 		float rightGap = Math.max(0, screen.right - virtualScreen.right);
-		float numX = -(rightGap / 2 - keySize * keyScales[6] / 2);
-		if (layoutVariant == TYPE_LANDSCAPE) {
+		float edge = Math.min(screen.width(), screen.height()) * LANDSCAPE_EDGE_X;
+		float numW = keySize * keyScales[6];
+		float fireW = keySize * keyScales[8];
+		float numX = -Math.max((rightGap + edge) / 2 - numW / 2, edge + numW);
+		if (layoutVariant == TYPE_LANDSCAPE || layoutVariant == TYPE_LANDSCAPE_SPLIT) {
 			keypad[KEY_NUM5].snapOffset.set(numX, 0);
 		} else {
 			keypad[KEY_NUM2].snapOffset.set(numX, -keySize * keyScales[7] / 2);
 		}
-		keypad[KEY_FIRE].snapOffset.set(leftGap / 2 - keySize * keyScales[8] / 2, 0);
+		keypad[KEY_FIRE].snapOffset.set(Math.max((leftGap + edge) / 2 - fireW / 2, edge + fireW), 0);
 	}
 
 	public boolean isLandscape() {
-		return layoutVariant == TYPE_LANDSCAPE || layoutVariant == TYPE_LANDSCAPE_SIMPLE;
+		return layoutVariant == TYPE_LANDSCAPE || layoutVariant == TYPE_LANDSCAPE_SIMPLE
+				|| layoutVariant == TYPE_LANDSCAPE_SPLIT;
 	}
 
 	public int getLayout() {
@@ -1008,8 +1049,9 @@ public class VirtualKeyboard implements Overlay, Runnable {
 		float keySize;
 		if (isLandscape()) {
 			float gap = (max - Math.max(virtualScreen.width(), 0)) / 2;
-			float rows = layoutVariant == TYPE_LANDSCAPE ? 5.3F : 4.4F;
-			keySize = Math.min(min / rows, Math.max(gap / 3.15F, min / 7.5F));
+			float rows = layoutVariant == TYPE_LANDSCAPE_SIMPLE ? 4.15F : 5.1F;
+			float height = min * (1 - 2 * LANDSCAPE_EDGE_Y);
+			keySize = Math.min(height / rows, Math.max((gap - min * LANDSCAPE_EDGE_X) / 3.1F, min / 7.5F));
 		} else if (isPhone()) {
 			keySize = min / 6.0F;
 		} else if (nonWide || landscape) {
@@ -1360,6 +1402,8 @@ public class VirtualKeyboard implements Overlay, Runnable {
 		void paint(CanvasWrapper g) {
 			int bgColor;
 			int fgColor;
+			boolean splitFire = this == keypad[KEY_NUM5] && layoutVariant == TYPE_LANDSCAPE_SPLIT;
+			int style = splitFire ? STYLE_FIRE : this.style;
 			if (selected) {
 				bgColor = style == STYLE_FIRE ? 0xFFFFFF : settings.vkBgColorSelected;
 				fgColor = style == STYLE_FIRE ? 0x1A1408 : settings.vkFgColorSelected;
@@ -1398,6 +1442,14 @@ public class VirtualKeyboard implements Overlay, Runnable {
 			String text = label;
 			if (isPhone() && phoneLabel != null) text = phoneLabel;
 			else if (isLandscape() && landLabel != null) text = landLabel;
+			if (splitFire) {
+				float h = rect.height();
+				g.drawString(text, rect.centerX(), rect.centerY() - h * 0.12f);
+				g.setTextScale(0.6f);
+				g.drawString("确定", rect.centerX(), rect.centerY() + h * 0.24f);
+				g.setTextScale(1f);
+				return;
+			}
 			g.drawString(text, rect.centerX(), rect.centerY());
 			if (hint != null && layoutVariant == TYPE_PHONE) {
 				g.setTextColor(((alpha >>> 25) << 24) | fgColor);

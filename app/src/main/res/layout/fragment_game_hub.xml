@@ -67,6 +67,10 @@
                     android:tint="@color/hub_text" />
             </LinearLayout>
 
+            <include
+                android:id="@+id/filter_home"
+                layout="@layout/view_platform_filter" />
+
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent">
@@ -98,6 +102,7 @@
                         android:textSize="56sp" />
 
                     <TextView
+                        android:id="@+id/home_empty_title"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
@@ -107,12 +112,13 @@
                         android:textStyle="bold" />
 
                     <TextView
+                        android:id="@+id/home_empty_desc"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
                         android:gravity="center"
                         android:lineSpacingExtra="3dp"
-                        android:text="把游戏包（zip）拷到手机里，点下面的按钮选择它，\n游戏会自动识别、分类、放进游戏厅。\n也可以直接选 jar 文件，支持多选。"
+                        android:text="把游戏包（zip）拷到手机里，点下面的按钮选择它，\n游戏会自动识别、分类、放进游戏厅。\n支持 Java（jar）和 MRP（mrp）游戏，可以多选。"
                         android:textColor="@color/hub_text_secondary"
                         android:textSize="13sp" />
 
@@ -141,6 +147,10 @@
             <TextView
                 style="@style/HubPageTitle"
                 android:text="分类" />
+
+            <include
+                android:id="@+id/filter_category"
+                layout="@layout/view_platform_filter" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -222,6 +232,10 @@
                     android:src="@drawable/ic_hub_close"
                     android:visibility="gone" />
             </LinearLayout>
+
+            <include
+                android:id="@+id/filter_search"
+                layout="@layout/view_platform_filter" />
 
             <FrameLayout
                 android:layout_width="match_parent"

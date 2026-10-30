@@ -40,3 +40,4 @@
 -keep class org.acra.attachment.DefaultAttachmentProvider { *; }
 -keep class ru.playsoftware.j2meloader.crashes.models.* { *; }
 -keep class ru.playsoftware.j2meloader.gamehub.GameEntry { *; }
+-keep class ru.playsoftware.j2meloader.mrp.MrpNative { *; }

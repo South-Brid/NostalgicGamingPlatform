@@ -46,6 +46,7 @@ public class MidletThread extends HandlerThread implements Handler.Callback {
 	private static final int STARTED = 1;
 	private static final int PAUSED = 2;
 	private static final int DESTROYED = 3;
+	private static final long EXIT_ANIMATION_MS = 450;
 	public static String[] startAfterDestroy;
 	private static MidletThread instance;
 	private final MicroLoader microLoader;
@@ -73,13 +74,24 @@ public class MidletThread extends HandlerThread implements Handler.Callback {
 			instance.state = DESTROYED;
 		}
 		MicroActivity activity = ContextHolder.getActivity();
-		if (activity != null) {
+		if (activity == null) {
+			Process.killProcess(Process.myPid());
+			return;
+		}
+		new Thread(() -> {
+			try {
+				Thread.sleep(EXIT_ANIMATION_MS);
+			} catch (InterruptedException ignored) {
+			}
+			Process.killProcess(Process.myPid());
+		}, "ExitTransition").start();
+		String[] next = startAfterDestroy;
+		activity.runOnUiThread(() -> {
 			activity.finish();
-		}
-		if (startAfterDestroy != null) {
-			Config.startApp(ContextHolder.getActivity(), startAfterDestroy[0], startAfterDestroy[1], false, startAfterDestroy[2]);
-		}
-		Process.killProcess(Process.myPid());
+			if (next != null) {
+				Config.startApp(activity, next[0], next[1], false, next[2]);
+			}
+		});
 	}
 
 	public static void notifyPaused() {
@@ -109,6 +121,7 @@ public class MidletThread extends HandlerThread implements Handler.Callback {
 		}, "ForceDestroyTimer").start();
 		MicroActivity activity = ContextHolder.getActivity();
 		if (activity != null) {
+			activity.runOnUiThread(activity::showExitOverlay);
 			Displayable current = activity.getCurrent();
 			if (current instanceof Canvas) {
 				Canvas canvas = (Canvas) current;
