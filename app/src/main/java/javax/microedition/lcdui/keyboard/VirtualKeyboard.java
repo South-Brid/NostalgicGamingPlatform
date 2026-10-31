@@ -90,6 +90,8 @@ public class VirtualKeyboard implements Overlay, Runnable {
 	private static final float PHONE_KEY_ROWS = 5;
 	private static final float PHONE_KEY_SCALE_X = 2.0f;
 	private static final float PHONE_KEY_SCALE_Y = 0.75f;
+	private static final float PHONE_ARROWS_DPAD_SCALE_Y = PHONE_KEY_SCALE_Y * 0.85f;
+	private static final float PHONE_ARROWS_SOFT_SCALE_Y = PHONE_KEY_SCALE_Y * 0.75f;
 	private static final long[] REPEAT_INTERVALS = {200, 400, 128, 128, 128, 128, 128};
 
 	private static final int SCREEN = -1;
@@ -343,36 +345,38 @@ public class VirtualKeyboard implements Overlay, Runnable {
 					keyScales[j++] = PHONE_KEY_SCALE_X;
 					keyScales[j++] = PHONE_KEY_SCALE_Y;
 				}
+				keyScales[1] = keyScales[9] = PHONE_ARROWS_DPAD_SCALE_Y;
+				keyScales[3] = keyScales[11] = PHONE_ARROWS_SOFT_SCALE_Y;
 
 				setSnap(KEY_NUM0, SCREEN, RectSnap.INT_SOUTH, true);
 				setSnap(KEY_STAR, KEY_NUM0, RectSnap.EXT_WEST, true);
 				setSnap(KEY_POUND, KEY_NUM0, RectSnap.EXT_EAST, true);
 				setSnap(KEY_NUM7, KEY_STAR, RectSnap.EXT_NORTH, true);
-				setSnap(KEY_DOWN, KEY_NUM7, RectSnap.EXT_EAST, true);
-				setSnap(KEY_NUM9, KEY_DOWN, RectSnap.EXT_EAST, true);
-				setSnap(KEY_LEFT, KEY_NUM7, RectSnap.EXT_NORTH, true);
-				setSnap(KEY_FIRE, KEY_LEFT, RectSnap.EXT_EAST, true);
+				setSnap(KEY_NUM8, KEY_NUM7, RectSnap.EXT_EAST, true);
+				setSnap(KEY_NUM9, KEY_NUM8, RectSnap.EXT_EAST, true);
+				setSnap(KEY_NUM4, KEY_NUM7, RectSnap.EXT_NORTH, true);
+				setSnap(KEY_NUM5, KEY_NUM4, RectSnap.EXT_EAST, true);
+				setSnap(KEY_NUM6, KEY_NUM5, RectSnap.EXT_EAST, true);
+				setSnap(KEY_NUM1, KEY_NUM4, RectSnap.EXT_NORTH, true);
+				setSnap(KEY_NUM2, KEY_NUM1, RectSnap.EXT_EAST, true);
+				setSnap(KEY_NUM3, KEY_NUM2, RectSnap.EXT_EAST, true);
+				setSnap(KEY_DOWN, KEY_NUM2, RectSnap.EXT_NORTH, true);
+				setSnap(KEY_FIRE, KEY_DOWN, RectSnap.EXT_NORTH, true);
+				setSnap(KEY_LEFT, KEY_FIRE, RectSnap.EXT_WEST, true);
 				setSnap(KEY_RIGHT, KEY_FIRE, RectSnap.EXT_EAST, true);
-				setSnap(KEY_NUM1, KEY_LEFT, RectSnap.EXT_NORTH, true);
-				setSnap(KEY_UP, KEY_NUM1, RectSnap.EXT_EAST, true);
-				setSnap(KEY_NUM3, KEY_UP, RectSnap.EXT_EAST, true);
-				setSnap(KEY_SOFT_LEFT, KEY_NUM1, RectSnap.EXT_NORTH, true);
+				setSnap(KEY_UP, KEY_FIRE, RectSnap.EXT_NORTH, true);
 				setSnap(KEY_MENU, KEY_UP, RectSnap.EXT_NORTH, true);
-				setSnap(KEY_SOFT_RIGHT, KEY_NUM3, RectSnap.EXT_NORTH, true);
+				setSnap(KEY_SOFT_LEFT, KEY_MENU, RectSnap.EXT_WEST, true);
+				setSnap(KEY_SOFT_RIGHT, KEY_MENU, RectSnap.EXT_EAST, true);
 
 				setSnap(KEY_A, SCREEN, RectSnap.INT_NORTHWEST, false);
 				setSnap(KEY_B, SCREEN, RectSnap.INT_NORTHEAST, false);
 				setSnap(KEY_C, KEY_A, RectSnap.EXT_SOUTH, false);
 				setSnap(KEY_D, KEY_B, RectSnap.EXT_SOUTH, false);
 				setSnap(KEY_UP_LEFT, KEY_C, RectSnap.EXT_SOUTH, false);
-				setSnap(KEY_NUM2, KEY_C, RectSnap.EXT_SOUTHEAST, false);
 				setSnap(KEY_UP_RIGHT, KEY_D, RectSnap.EXT_SOUTH, false);
-				setSnap(KEY_NUM4, KEY_UP_LEFT, RectSnap.EXT_SOUTH, false);
-				setSnap(KEY_NUM5, KEY_NUM2, RectSnap.EXT_SOUTH, false);
-				setSnap(KEY_NUM6, KEY_UP_RIGHT, RectSnap.EXT_SOUTH, false);
-				setSnap(KEY_DOWN_LEFT, KEY_NUM4, RectSnap.EXT_SOUTH, false);
-				setSnap(KEY_DOWN_RIGHT, KEY_NUM6, RectSnap.EXT_SOUTH, false);
-				setSnap(KEY_NUM8, KEY_NUM5, RectSnap.EXT_SOUTH, false);
+				setSnap(KEY_DOWN_LEFT, KEY_UP_LEFT, RectSnap.EXT_SOUTH, false);
+				setSnap(KEY_DOWN_RIGHT, KEY_UP_RIGHT, RectSnap.EXT_SOUTH, false);
 				break;
 			case TYPE_NUM_ARR:
 			default:
@@ -544,34 +548,34 @@ public class VirtualKeyboard implements Overlay, Runnable {
 			case TYPE_LANDSCAPE_SIMPLE:
 				Arrays.fill(keyScales, 1);
 
-				setSnap(KEY_FIRE, SCREEN, RectSnap.INT_WEST, true);
-				setSnap(KEY_UP, KEY_FIRE, RectSnap.EXT_NORTH, true);
-				setSnap(KEY_DOWN, KEY_FIRE, RectSnap.EXT_SOUTH, true);
-				setSnap(KEY_LEFT, KEY_FIRE, RectSnap.EXT_WEST, true);
-				setSnap(KEY_RIGHT, KEY_FIRE, RectSnap.EXT_EAST, true);
+				setSnap(KEY_FIRE, SCREEN, RectSnap.INT_WEST, false);
+				setSnap(KEY_NUM2, KEY_FIRE, RectSnap.EXT_NORTH, true);
+				setSnap(KEY_NUM8, KEY_FIRE, RectSnap.EXT_SOUTH, true);
+				setSnap(KEY_NUM4, KEY_FIRE, RectSnap.EXT_WEST, true);
+				setSnap(KEY_NUM6, KEY_FIRE, RectSnap.EXT_EAST, true);
+				setSnap(KEY_UP, KEY_FIRE, RectSnap.EXT_NORTH, false);
+				setSnap(KEY_DOWN, KEY_FIRE, RectSnap.EXT_SOUTH, false);
+				setSnap(KEY_LEFT, KEY_FIRE, RectSnap.EXT_WEST, false);
+				setSnap(KEY_RIGHT, KEY_FIRE, RectSnap.EXT_EAST, false);
 				setSnap(KEY_UP_LEFT, KEY_UP, RectSnap.EXT_WEST, false);
 				setSnap(KEY_UP_RIGHT, KEY_UP, RectSnap.EXT_EAST, false);
 				setSnap(KEY_DOWN_LEFT, KEY_DOWN, RectSnap.EXT_WEST, false);
 				setSnap(KEY_DOWN_RIGHT, KEY_DOWN, RectSnap.EXT_EAST, false);
 
-				setSnap(KEY_NUM2, SCREEN, RectSnap.INT_EAST, false);
-				setSnap(KEY_NUM1, KEY_NUM2, RectSnap.EXT_WEST, true);
-				setSnap(KEY_NUM3, KEY_NUM2, RectSnap.EXT_EAST, true);
-				setSnap(KEY_NUM8, KEY_NUM2, RectSnap.EXT_SOUTH, false);
-				setSnap(KEY_NUM7, KEY_NUM8, RectSnap.EXT_WEST, true);
-				setSnap(KEY_NUM9, KEY_NUM8, RectSnap.EXT_EAST, true);
-				setSnap(KEY_NUM0, KEY_NUM8, RectSnap.EXT_SOUTH, true);
+				setSnap(KEY_A, SCREEN, RectSnap.INT_EAST, false);
+				setSnap(KEY_NUM1, KEY_A, RectSnap.EXT_WEST, true);
+				setSnap(KEY_NUM3, KEY_A, RectSnap.EXT_EAST, true);
+				setSnap(KEY_B, KEY_A, RectSnap.EXT_SOUTH, false);
+				setSnap(KEY_NUM7, KEY_B, RectSnap.EXT_WEST, true);
+				setSnap(KEY_NUM9, KEY_B, RectSnap.EXT_EAST, true);
+				setSnap(KEY_NUM0, KEY_B, RectSnap.EXT_SOUTH, true);
 				setSnap(KEY_STAR, KEY_NUM0, RectSnap.EXT_WEST, true);
 				setSnap(KEY_POUND, KEY_NUM0, RectSnap.EXT_EAST, true);
-				setSnap(KEY_NUM5, KEY_NUM8, RectSnap.INT_NORTH, false);
-				setSnap(KEY_NUM4, KEY_NUM7, RectSnap.INT_NORTH, false);
-				setSnap(KEY_NUM6, KEY_NUM9, RectSnap.INT_NORTH, false);
 				setSnap(KEY_SOFT_LEFT, KEY_NUM1, RectSnap.EXT_NORTH, true);
-				setSnap(KEY_MENU, KEY_NUM2, RectSnap.EXT_NORTH, true);
+				setSnap(KEY_MENU, KEY_A, RectSnap.EXT_NORTH, true);
 				setSnap(KEY_SOFT_RIGHT, KEY_NUM3, RectSnap.EXT_NORTH, true);
 
-				setSnap(KEY_A, KEY_UP_LEFT, RectSnap.EXT_NORTH, false);
-				setSnap(KEY_B, KEY_UP_RIGHT, RectSnap.EXT_NORTH, false);
+				setSnap(KEY_NUM5, KEY_A, RectSnap.EXT_SOUTH, true);
 				setSnap(KEY_C, KEY_DOWN_LEFT, RectSnap.EXT_SOUTH, false);
 				setSnap(KEY_D, KEY_DOWN_RIGHT, RectSnap.EXT_SOUTH, false);
 				break;
@@ -624,7 +628,8 @@ public class VirtualKeyboard implements Overlay, Runnable {
 		if (layoutVariant == TYPE_LANDSCAPE || layoutVariant == TYPE_LANDSCAPE_SPLIT) {
 			keypad[KEY_NUM5].snapOffset.set(numX, 0);
 		} else {
-			keypad[KEY_NUM2].snapOffset.set(numX, -keySize * keyScales[7] / 2);
+			keypad[KEY_A].snapOffset.set(numX, -keySize * keyScales[7] / 2);
+			if (layoutVariant == TYPE_LANDSCAPE_SIMPLE) keypad[KEY_NUM5].snapOffset.set(0, -keySize * keyScales[7] / 2);
 		}
 		keypad[KEY_FIRE].snapOffset.set(Math.max((leftGap + edge) / 2 - fireW / 2, edge + fireW), 0);
 	}
@@ -639,6 +644,9 @@ public class VirtualKeyboard implements Overlay, Runnable {
 	}
 
 	public float getPhoneKeyboardHeight(float w, float h) {
+		if (layoutVariant == TYPE_PHONE_ARROWS) {
+			return getKeySize(w, h) * (4 * keyScales[7] + 3 * keyScales[1] + keyScales[3]);
+		}
 		return PHONE_KEY_ROWS * getKeySize(w, h) * PHONE_KEY_SCALE_Y;
 	}
 
@@ -1451,7 +1459,7 @@ public class VirtualKeyboard implements Overlay, Runnable {
 				return;
 			}
 			g.drawString(text, rect.centerX(), rect.centerY());
-			if (hint != null && layoutVariant == TYPE_PHONE) {
+			if (hint != null && (layoutVariant == TYPE_PHONE || layoutVariant == TYPE_LANDSCAPE_SIMPLE)) {
 				g.setTextColor(((alpha >>> 25) << 24) | fgColor);
 				g.setTextScale(0.6f);
 				g.setTextAlign(Paint.Align.RIGHT);

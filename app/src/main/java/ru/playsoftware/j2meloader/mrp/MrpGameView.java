@@ -117,17 +117,25 @@ class MrpGameView extends View {
 	private void layoutPhone(float w, float h) {
 		float ex = Math.min(w, h) * PORTRAIT_EDGE_X, ey = Math.min(w, h) * PORTRAIT_EDGE_Y;
 		float colW = (w - ex * 2) / 3;
-		float rowH = Math.min(colW * 0.6f, h * 0.4f / 5);
-		float top = h - ey - rowH * 5;
+		float rowH = Math.min(colW * 0.6f, h * 0.5f / 7.3f);
+		float softH = rowH * 0.75f, padH = rowH * 0.85f;
+		float top = h - ey - (rowH * 4 + padH * 3 + softH);
 		fitScreen(0, 0, w, top - rowH * 0.2f);
-		Object[][] grid = {
-				{MrpNative.KEY_SOFT_LEFT, "左键", STYLE_SOFT}, {KEY_MENU, "菜单", STYLE_SOFT}, {MrpNative.KEY_SOFT_RIGHT, "右键", STYLE_SOFT},
-				{MrpNative.KEY_0 + 1, "1", STYLE_NUM}, {MrpNative.KEY_UP, "↑", STYLE_ARROW}, {MrpNative.KEY_0 + 3, "3", STYLE_NUM},
-				{MrpNative.KEY_LEFT, "←", STYLE_ARROW}, {MrpNative.KEY_SELECT, "确定", STYLE_FIRE}, {MrpNative.KEY_RIGHT, "→", STYLE_ARROW},
-				{MrpNative.KEY_0 + 7, "7", STYLE_NUM}, {MrpNative.KEY_DOWN, "↓", STYLE_ARROW}, {MrpNative.KEY_0 + 9, "9", STYLE_NUM},
-				{MrpNative.KEY_STAR, "*", STYLE_NUM}, {MrpNative.KEY_0, "0", STYLE_NUM}, {MrpNative.KEY_POUND, "#", STYLE_NUM}};
-		for (int i = 0; i < grid.length; i++) {
-			add((int) grid[i][0], (String) grid[i][1], (int) grid[i][2], ex + (i % 3) * colW, top + (i / 3) * rowH, colW, rowH);
+		float x1 = ex + colW, x2 = ex + colW * 2;
+		float padTop = top + softH;
+		float numTop = padTop + padH * 3;
+		add(MrpNative.KEY_SOFT_LEFT, "左键", STYLE_SOFT, ex, top, colW, softH);
+		add(KEY_MENU, "菜单", STYLE_SOFT, x1, top, colW, softH);
+		add(MrpNative.KEY_SOFT_RIGHT, "右键", STYLE_SOFT, x2, top, colW, softH);
+		add(MrpNative.KEY_UP, "↑", STYLE_ARROW, x1, padTop, colW, padH);
+		add(MrpNative.KEY_LEFT, "←", STYLE_ARROW, ex, padTop + padH, colW, padH);
+		add(MrpNative.KEY_SELECT, "确定", STYLE_FIRE, x1, padTop + padH, colW, padH);
+		add(MrpNative.KEY_RIGHT, "→", STYLE_ARROW, x2, padTop + padH, colW, padH);
+		add(MrpNative.KEY_DOWN, "↓", STYLE_ARROW, x1, padTop + padH * 2, colW, padH);
+		for (int i = 0; i < 12; i++) {
+			int code = i < 9 ? MrpNative.KEY_0 + i + 1 : i == 9 ? MrpNative.KEY_STAR : i == 10 ? MrpNative.KEY_0 : MrpNative.KEY_POUND;
+			String label = i < 9 ? String.valueOf(i + 1) : i == 9 ? "*" : i == 10 ? "0" : "#";
+			add(code, label, STYLE_NUM, ex + (i % 3) * colW, numTop + (i / 3) * rowH, colW, rowH);
 		}
 		textSize = rowH * 0.36f;
 	}
@@ -169,6 +177,7 @@ class MrpGameView extends View {
 		if (style == KeyboardStyles.LANDSCAPE_SIMPLE) {
 			add(MrpNative.KEY_0 + 1, "1", STYLE_NUM, rightX, numTop, cell, cell);
 			add(MrpNative.KEY_0 + 3, "3", STYLE_NUM, rightX + cell * 2, numTop, cell, cell);
+			add(MrpNative.KEY_0 + 5, "5", STYLE_NUM, rightX + cell, numTop + cell * 0.5f, cell, cell);
 			add(MrpNative.KEY_0 + 7, "7", STYLE_NUM, rightX, numTop + cell, cell, cell);
 			add(MrpNative.KEY_0 + 9, "9", STYLE_NUM, rightX + cell * 2, numTop + cell, cell, cell);
 			add(MrpNative.KEY_STAR, "*", STYLE_NUM, rightX, numTop + cell * 2, cell, cell);
@@ -184,7 +193,14 @@ class MrpGameView extends View {
 			padTop = (h - cell * 4) / 2 + cell;
 			add(KEY_MENU, "菜单", STYLE_SOFT, leftX, padTop - cell, cell, cell * 0.85f);
 		}
-		dpad(leftX, padTop, cell, !split);
+		if (style == KeyboardStyles.LANDSCAPE_SIMPLE) {
+			add(MrpNative.KEY_0 + 2, "2", "↑", STYLE_NUM, leftX + cell, padTop, cell, cell);
+			add(MrpNative.KEY_0 + 4, "4", "←", STYLE_NUM, leftX, padTop + cell, cell, cell);
+			add(MrpNative.KEY_0 + 6, "6", "→", STYLE_NUM, leftX + cell * 2, padTop + cell, cell, cell);
+			add(MrpNative.KEY_0 + 8, "8", "↓", STYLE_NUM, leftX + cell, padTop + cell * 2, cell, cell);
+		} else {
+			dpad(leftX, padTop, cell, !split);
+		}
 		textSize = cell * 0.34f;
 	}
 

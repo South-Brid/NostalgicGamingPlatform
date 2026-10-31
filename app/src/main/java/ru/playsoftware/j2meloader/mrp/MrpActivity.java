@@ -1,10 +1,13 @@
 package ru.playsoftware.j2meloader.mrp;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
 import android.os.Bundle;
@@ -12,6 +15,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Process;
 import android.os.SystemClock;
+import android.system.ErrnoException;
+import android.system.Os;
+import android.system.OsConstants;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.text.InputFilter;
@@ -23,19 +29,37 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
+import ru.playsoftware.j2meloader.BuildConfig;
 import ru.playsoftware.j2meloader.R;
 import ru.playsoftware.j2meloader.databinding.ViewGameLaunchBinding;
 import ru.playsoftware.j2meloader.gamehub.KeyboardStyles;
@@ -92,7 +116,7 @@ public class MrpActivity extends AppCompatActivity implements MrpNative.Host {
 		Context app = getApplicationContext();
 		new Thread(() -> {
 			try {
-				File rootDir = MrpRuntime.prepare(app);
+				File rootDir = MrpRuntime.prepare(app, id);
 				String name = MrpRuntime.installGame(app, new File(path), id);
 				main.post(() -> {
 					if (isFinishing()) return;
@@ -183,13 +207,57 @@ public class MrpActivity extends AppCompatActivity implements MrpNative.Host {
 	}
 
 	private void fail(String message) {
+		fail(message, null);
+	}
+
+	private void fail(String message, String detail) {
 		if (isFinishing()) return;
-		new AlertDialog.Builder(this, R.style.HubDialog)
+		AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.HubDialog)
 				.setTitle("游戏无法运行")
-				.setMessage(message)
 				.setCancelable(false)
-				.setPositiveButton("返回", (d, w) -> exit())
-				.show();
+				.setPositiveButton("返回", (d, w) -> exit());
+		if (detail == null) {
+			builder.setMessage(message);
+		} else {
+			String report = "游戏：" + getIntent().getStringExtra(EXTRA_NAME) + "（" + gameId + "）\n版本："
+					+ BuildConfig.VERSION_NAME + "\n" + detail;
+			saveReport(report);
+			float dp = getResources().getDisplayMetrics().density;
+			int pad = (int) (20 * dp);
+			LinearLayout box = new LinearLayout(this);
+			box.setOrientation(LinearLayout.VERTICAL);
+			box.setPadding(pad, (int) (8 * dp), pad, 0);
+			TextView summary = new TextView(this);
+			summary.setText(message);
+			summary.setTextColor(ContextCompat.getColor(this, R.color.hub_text));
+			summary.setTextSize(15);
+			summary.setPadding(0, 0, 0, (int) (8 * dp));
+			box.addView(summary);
+			TextView body = new TextView(this);
+			body.setText(detail);
+			body.setTypeface(Typeface.MONOSPACE);
+			body.setTextSize(11);
+			body.setTextColor(ContextCompat.getColor(this, R.color.hub_text_secondary));
+			body.setTextIsSelectable(true);
+			ScrollView scroll = new ScrollView(this);
+			scroll.addView(body);
+			box.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+					(int) (getResources().getDisplayMetrics().heightPixels * 0.45f)));
+			builder.setView(box).setNeutralButton("复制错误信息", (d, w) -> {
+				ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+				if (clipboard != null) clipboard.setPrimaryClip(ClipData.newPlainText("MRP error", report));
+				Toast.makeText(this, "已复制，可以粘贴发给开发者", Toast.LENGTH_LONG).show();
+				exit();
+			});
+		}
+		builder.show();
+	}
+
+	private void saveReport(String report) {
+		try (FileOutputStream out = new FileOutputStream(new File(MrpRuntime.root(this), "last_error.txt"))) {
+			out.write(report.getBytes(StandardCharsets.UTF_8));
+		} catch (IOException ignored) {
+		}
 	}
 
 	private void exit() {
@@ -279,11 +347,71 @@ public class MrpActivity extends AppCompatActivity implements MrpNative.Host {
 	}
 
 	@Override
-	public void onExit(int code) {
+	public void onExit(int code, byte[] detail) {
+		String decoded = decodeDetail(detail);
+		String text = decoded == null ? null : decoded + "\n" + fileReport();
 		main.post(() -> {
 			if (code == 0) exit();
-			else fail(code == 1 ? "游戏启动失败，可能是不支持的 MRP 文件" : "游戏运行出错，已停止");
+			else fail(code == 1 ? "游戏启动失败，可能是不支持的 MRP 文件" : "游戏运行出错，已停止", text);
 		});
+	}
+
+	private String fileReport() {
+		StringBuilder sb = new StringBuilder("---- 文件 ----\n");
+		File mythroad = new File(MrpRuntime.gameRoot(this, gameId), "mythroad");
+		List<File> files = new ArrayList<>();
+		collectFiles(mythroad, files);
+		Collections.sort(files);
+		String base = mythroad.getPath() + File.separator;
+		SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
+		for (File f : files) {
+			sb.append(f.getPath().substring(base.length())).append(' ').append(f.length()).append(' ')
+					.append(format.format(new Date(f.lastModified()))).append('\n');
+		}
+		File sandbox = new File(mythroad, gameId + ".mrp");
+		File source = new File(String.valueOf(getIntent().getStringExtra(EXTRA_PATH)));
+		String a = md5(sandbox), b = md5(source);
+		sb.append("游戏文件 md5：沙盒=").append(a).append('(').append(sandbox.length()).append(")  源=").append(b)
+				.append('(').append(source.length()).append(")  ").append(a.equals(b) ? "一致" : "不一致").append('\n');
+		return sb.toString();
+	}
+
+	private static void collectFiles(File dir, List<File> out) {
+		File[] children = dir.listFiles();
+		if (children == null) return;
+		for (File f : children) {
+			try {
+				if (OsConstants.S_ISLNK(Os.lstat(f.getPath()).st_mode)) continue;
+			} catch (ErrnoException e) {
+				continue;
+			}
+			if (f.isDirectory()) collectFiles(f, out);
+			else if (f.isFile()) out.add(f);
+		}
+	}
+
+	private static String md5(File file) {
+		try (InputStream in = new FileInputStream(file)) {
+			MessageDigest digest = MessageDigest.getInstance("MD5");
+			byte[] buf = new byte[65536];
+			int n;
+			while ((n = in.read(buf)) > 0) digest.update(buf, 0, n);
+			StringBuilder sb = new StringBuilder();
+			for (byte x : digest.digest()) sb.append(String.format(Locale.US, "%02x", x));
+			return sb.toString();
+		} catch (Exception e) {
+			return "无法读取";
+		}
+	}
+
+	private static String decodeDetail(byte[] detail) {
+		if (detail == null || detail.length == 0) return null;
+		try {
+			return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+					.onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(detail)).toString();
+		} catch (CharacterCodingException e) {
+			return new String(detail, Charset.forName("GBK"));
+		}
 	}
 
 	@Override

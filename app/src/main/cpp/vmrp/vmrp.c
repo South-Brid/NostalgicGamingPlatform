@@ -52,6 +52,31 @@ static void hook_mem_valid(uc_engine *uc, uc_mem_type type, uint64_t address, in
 
 #define MAX_LENIENT_PAGES 1024
 static int lenientPages = 0;
+static int lenientLogged = 0;
+
+static void logLenientAccess(uc_engine *uc, uc_mem_type type, uint64_t address) {
+    uint32_t pc = 0, lr = 0, sp = 0;
+    uc_reg_read(uc, UC_ARM_REG_PC, &pc);
+    uc_reg_read(uc, UC_ARM_REG_LR, &lr);
+    uc_reg_read(uc, UC_ARM_REG_SP, &sp);
+    printf("lenient map: type=%s addr=0x%" PRIx64 " PC=0x%X LR=0x%X", memTypeStr(type), address, pc, lr);
+    dumpREG(uc);
+    uint32_t code = (pc & ~3u) - 16;
+    uint8_t buf[32];
+    if (uc_mem_read(uc, code, buf, sizeof(buf)) == UC_ERR_OK) {
+        for (int i = 0; i < 32; i += 16) {
+            printf("code@0x%X: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
+                   code + i, buf[i], buf[i + 1], buf[i + 2], buf[i + 3], buf[i + 4], buf[i + 5], buf[i + 6], buf[i + 7],
+                   buf[i + 8], buf[i + 9], buf[i + 10], buf[i + 11], buf[i + 12], buf[i + 13], buf[i + 14], buf[i + 15]);
+        }
+    }
+    uint32_t words[16];
+    if (uc_mem_read(uc, sp, words, sizeof(words)) == UC_ERR_OK) {
+        for (int i = 0; i < 16; i += 4) {
+            printf("sp+%02X: %08X %08X %08X %08X", i * 4, words[i], words[i + 1], words[i + 2], words[i + 3]);
+        }
+    }
+}
 
 static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type, uint64_t address, int size, int64_t value, void *user_data) {
     printf(">>> Tracing mem_invalid mem_type:%s at 0x%" PRIx64 ", size:0x%x, value:0x%" PRIx64 "\n",
@@ -61,6 +86,10 @@ static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type, uint64_t address, 
         uint64_t end = (address + (size > 0 ? size : 4) + 0xFFF) & ~(uint64_t)0xFFF;
         if (uc_mem_map(uc, begin, end - begin, UC_PROT_READ | UC_PROT_WRITE) == UC_ERR_OK) {
             lenientPages += (int)((end - begin) >> 12);
+            if (lenientLogged < 4) {
+                lenientLogged++;
+                logLenientAccess(uc, type, address);
+            }
             return true;
         }
     }

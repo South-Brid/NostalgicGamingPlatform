@@ -40,6 +40,8 @@ APK 不内置游戏，游戏都通过「导入游戏包」进入 App。
 - 1.1.3 横屏「方向键分离」、键盘样式按竖屏/横屏/悬浮分组、启动/退出游戏转场和加载画面
 - 1.2.0 支持 MRP 游戏（vmrp + unicorn 内核）
 - 1.2.1 Java / MRP 两个独立游戏厅；MRP 键盘支持和 Java 一样的样式；MRP 越界内存访问不再直接崩溃
+- 1.2.2 删除游戏同时清空存档；MRP 每个游戏独立沙盒；修复 MRP 加载插件后崩溃（如圣斗士星矢之冥王神话）；MRP 崩溃显示详细报告；
+  竖屏手机键盘·方向键版、横屏精简改为 2/4/6/8 + 1/3/5/7/9 布局
 
 ## 游戏来源
 1. 内置：`app/src/main/assets/games/`（目前为空，`prepare_games.py` 不带 `--catalog` 时会生成）
@@ -75,7 +77,8 @@ APK 不内置游戏，游戏都通过「导入游戏包」进入 App。
 - `GameIcons`：图标（Java 取 jar 里的图标；MRP 没有图标，显示首字 + 分类颜色）
 
 ### Java 游戏（J2ME Loader 原有部分）
-- `VirtualKeyboard` 新增布局（原版只有 0-6）：7 横屏标准、8 横屏精简、9 方向键分离（5 画成确定，按下发送 5）；
+- `VirtualKeyboard` 新增布局（原版只有 0-6）：7 横屏标准、8 横屏精简（左边是 2/4/6/8 数字十字、中间空，右边功能键 + 1/3/7/9/*/0/#，5 在 1/3/7/9 正中间）、9 方向键分离（5 画成确定，按下发送 5）；
+  2 手机键盘·方向键版（竖屏：左软键/菜单/右软键、↑、←确定→、↓、完整九宫格；软键行和方向键行比数字行矮，`getPhoneKeyboardHeight` 按这个算）；
   两侧按键在 `applyLandscapeOffsets()` 里居中并离边缘留白（`LANDSCAPE_EDGE_X/Y`）
 - `MicroActivity.orientationFor()` 按键盘样式强制横/竖屏；游戏内「切换键盘」也用 `KeyboardStyles.pick()`
 - 转场：`GameLauncher.start()` 进入动画（`res/anim/game_enter`）；`launch_overlay`（`view_game_launch.xml`）显示图标/名字/加载中，
@@ -91,13 +94,23 @@ APK 不内置游戏，游戏都通过「导入游戏包」进入 App。
   - 64 位适配：guest 结构体里的指针一律用 uint32（`dsm.h` 的 `#ifdef VMRP` 段、`bridge.c` 的 `mr_c_function_P_t`），
     宿主指针不能截成 32 位（`memory.c`）
   - 越界访问：启动时映射 0~CODE_ADDRESS，读写未映射地址时临时补页（`vmrp.c` 的 `hook_mem_invalid`），模拟真机不崩溃
+  - 内存是 `uc_mem_map_ptr` 映射的宿主缓冲区，宿主直接写模拟器内存（`br_mr_read`、`br_memcpy`、`br_memset`）后必须
+    `uc_ctl_remove_cache` 让那段地址的已翻译代码失效，否则 unicorn 继续执行旧代码。
+    付费插件（netpay）会先把游戏内存存成 `plugins/dump0`、在同一地址加载插件代码，结束后再读回来，不失效就会跳到 0 崩溃（圣斗士星矢之冥王神话）
+  - 文件打开（`fileLib.c` 的 `my_open`）：`MR_FILE_WRONLY` 当读写打开，`MR_FILE_RECREATE`(16) 在可写时截断；文件操作都会打日志（.uc2 字库除外）
+  - 致命错误时错误框显示编译时间、最近 200 行 `vmrp` 日志、首次越界访问时的寄存器/代码/栈、沙盒文件列表和游戏文件 md5，
+    可「复制错误信息」，也存到 `files/mrp/last_error.txt`
   - `vmrp_android.c`：JNI、模拟器线程（事件队列 + 定时器）、画面/声音/振动/对话框/编辑框回调到 Java；日志标签 `vmrp`
   - 新增 ndk-build 子目录后要删 `app/build/.cxx` 才会被识别
-- 运行时文件 `assets/mrp/`（cfunction.ext、字库、插件）首次运行复制到 `files/mrp/`；游戏复制到 `files/mrp/mythroad/<id>.mrp`；
+- 运行时文件 `assets/mrp/`（cfunction.ext、字库、插件）首次运行复制到 `files/mrp/`（共享运行时）；
   改了 assets 要把 `MrpRuntime.ASSETS_VERSION` +1
+- 每个游戏在自己的沙盒 `files/mrp/games/<id>/` 里运行：`cfunction.ext` 和 `mythroad/` 里的 assets 条目是指向共享副本的符号链接，
+  游戏在 `mythroad/<id>.mrp`，存档只写在这个目录里；旧版共享 `mythroad/` 里的存档首次启动时复制进来一次（标记 `files/mrp/legacy_seeded/<id>`）
+- 删除游戏会同时删除游戏文件、存档和按键设置（Java 存档在 `Config.getDataDir()/<id>`，MRP 是整个 `files/mrp/games/<id>/`）；
+  删除沙盒时绝不能递归进符号链接（会删掉共享字库/插件），`MrpRuntime.clearGame()` 用 `Os.lstat` 判断
 - Java 侧：`ru/playsoftware/j2meloader/mrp/`
   - `MrpActivity` 跑在独立进程 `:mrp`，返回键/「菜单」键打开菜单（切换键盘样式、退出）
-  - `MrpGameView` 画 240x320 屏幕和虚拟键盘；样式 2 手机键盘·方向键版（默认）、10 方向+数字（只给 MRP）、7/9/8 横屏，
+  - `MrpGameView` 画 240x320 屏幕和虚拟键盘；样式 2 手机键盘·方向键版（默认；从上到下：左键/菜单/右键、↑、←确定→、↓、完整九宫格，前几行比数字行矮）、10 方向+数字（只给 MRP）、7/9/8 横屏，
     方向键分离里的「5/确定」在 MRP 里发送确定键
   - 每个游戏的键盘样式存在 `files/mrp/keys/<id>`（文件，跨进程可见），默认值 `KeyboardStyles.getMrpDefault()`
 - 导入时游戏名取 mrp 文件头里的中文名（GBK，偏移 0x1C，24 字节）

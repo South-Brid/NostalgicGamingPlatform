@@ -56,17 +56,20 @@ final class GameLauncher {
 	}
 
 	static File mrpInstalledFile(Context context, GameEntry game) {
-		return new File(new File(MrpRuntime.root(context), "mythroad"), game.id + ".mrp");
+		return new File(new File(MrpRuntime.gameRoot(context, game.id), "mythroad"), game.id + ".mrp");
 	}
 
 	static void uninstall(Context context, GameEntry game) {
 		if (game.isMrp()) {
+			MrpRuntime.clearGame(context, game.id);
 			//noinspection ResultOfMethodCallIgnored
-			mrpInstalledFile(context, game).delete();
-			return;
+			new File(new File(MrpRuntime.root(context), "mythroad"), game.id + ".mrp").delete();
+		} else {
+			FileUtils.deleteDirectory(appDir(game));
+			FileUtils.deleteDirectory(configDir(game));
+			FileUtils.deleteDirectory(new File(Config.getDataDir(), game.id));
 		}
-		FileUtils.deleteDirectory(appDir(game));
-		FileUtils.deleteDirectory(configDir(game));
+		GameLibrary.removeRecent(context, game.id);
 	}
 
 	static void start(Context context, GameEntry game, boolean showSettings) {

@@ -568,8 +568,8 @@ public class GameHubFragment extends Fragment implements GameAdapter.Listener {
 	private void confirmDelete(GameEntry game) {
 		Context context = requireContext();
 		String message = game.source == GameEntry.SOURCE_LOCAL
-				? "会删除导入的游戏文件，存档会保留。"
-				: "会删除已下载的游戏文件，存档会保留；游戏仍在游戏源里，可以重新下载。";
+				? "游戏文件、存档和按键设置会全部删除，无法恢复。"
+				: "游戏文件、存档和按键设置会全部删除，无法恢复；游戏仍在游戏源里，可以重新下载。";
 		new AlertDialog.Builder(context, R.style.HubDialog)
 				.setTitle("删除「" + game.name + "」？")
 				.setMessage(message)

@@ -59,14 +59,33 @@ class KeyboardPreviewView extends View {
 			numbers(canvas, bodyR - cell * 3, gridB, cell);
 			return;
 		}
+		if (type == 2) {
+			float gridT = screenB + pad * 0.8f;
+			float cellW = bw / 3f, numH = (bodyB - gridT) / 7.3f;
+			float softH = numH * 0.75f, padH = numH * 0.85f;
+			for (int col = 0; col < 3; col++) {
+				key(canvas, bodyL + col * cellW, gridT, cellW, softH, SOFT);
+			}
+			float padT = gridT + softH;
+			key(canvas, bodyL + cellW, padT, cellW, padH, ARROW);
+			key(canvas, bodyL, padT + padH, cellW, padH, ARROW);
+			key(canvas, bodyL + cellW, padT + padH, cellW, padH, FIRE);
+			key(canvas, bodyL + cellW * 2, padT + padH, cellW, padH, ARROW);
+			key(canvas, bodyL + cellW, padT + padH * 2, cellW, padH, ARROW);
+			float numT = padT + padH * 3;
+			for (int row = 0; row < 4; row++) {
+				for (int col = 0; col < 3; col++) {
+					key(canvas, bodyL + col * cellW, numT + row * numH, cellW, numH, KEY);
+				}
+			}
+			return;
+		}
 		if (phone) {
 			float gridT = screenB + pad * 0.8f;
 			float cellW = bw / 3f, cellH = (bodyB - gridT) / 5f;
 			for (int row = 0; row < 5; row++) {
 				for (int col = 0; col < 3; col++) {
-					int color = row == 0 ? (col == 1 ? (type == 1 ? FIRE : KEY) : SOFT) : KEY;
-					if (type == 2 && row == 2 && col == 1) color = FIRE;
-					else if (type == 2 && isArrowCell(row, col)) color = ARROW;
+					int color = row == 0 ? (col == 1 ? FIRE : SOFT) : KEY;
 					key(canvas, bodyL + col * cellW, gridT + row * cellH, cellW, cellH, color);
 				}
 			}
@@ -127,20 +146,19 @@ class KeyboardPreviewView extends View {
 			}
 		}
 
+		if (simple) key(canvas, gridL + cell, gridT + cell * 1.5f, cell, cell, KEY);
+
 		float padL = left + (gap - cell * 3) / 2f, padT = top + (h - cell * 3) / 2f;
 		for (int row = 0; row < 3; row++) {
 			for (int col = 0; col < 3; col++) {
 				boolean center = row == 1 && col == 1;
 				boolean cross = row == 1 || col == 1;
 				if ((simple || split) && !cross) continue;
-				if (split && center) continue;
-				key(canvas, padL + col * cell, padT + row * cell, cell, cell, center ? FIRE : cross ? ARROW : 0x66FFC24B);
+				if ((simple || split) && center) continue;
+				key(canvas, padL + col * cell, padT + row * cell, cell, cell,
+						simple ? KEY : center ? FIRE : cross ? ARROW : 0x66FFC24B);
 			}
 		}
-	}
-
-	private static boolean isArrowCell(int row, int col) {
-		return (row == 1 && col == 1) || row == 2 || (row == 3 && col == 1);
 	}
 
 	private void numbers(Canvas c, float x, float bottom, float cell) {

@@ -7,6 +7,7 @@
 #define MR_FILE_WRONLY 2  //以只写的方式打开文件。
 #define MR_FILE_RDWR 4    //以读写的方式打开文件。
 #define MR_FILE_CREATE 8  //如果文件不存在，创建该文件。
+#define MR_FILE_RECREATE 16  //无论文件存不存在，都重新创建该文件。
 
 #define MR_IS_FILE 1     //文件
 #define MR_IS_DIR 2      //目录

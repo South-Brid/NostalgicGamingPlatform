@@ -98,6 +98,10 @@ static void br_mr_free(BridgeMap *o, uc_engine *uc) {
     my_freeExt(getMrpMemPtr(p));
 }
 
+static void invalidateCode(uc_engine *uc, uint32_t addr, uint32_t len) {
+    if (len > 0) uc_ctl_remove_cache(uc, addr, (uint64_t)addr + len);
+}
+
 static void br_memcpy(BridgeMap *o, uc_engine *uc) {
     //  void* (*T_memcpy)(void* dst, const void* src, int n);
     uint32_t dst, src, n;
@@ -105,6 +109,7 @@ static void br_memcpy(BridgeMap *o, uc_engine *uc) {
     uc_reg_read(uc, UC_ARM_REG_R1, &src);
     uc_reg_read(uc, UC_ARM_REG_R2, &n);
     memcpy(getMrpMemPtr(dst), getMrpMemPtr(src), n);
+    invalidateCode(uc, dst, n);
     SET_RET_V(dst);
 }
 
@@ -115,6 +120,7 @@ static void br_memset(BridgeMap *o, uc_engine *uc) {
     uc_reg_read(uc, UC_ARM_REG_R1, &value);
     uc_reg_read(uc, UC_ARM_REG_R2, &n);
     memset(getMrpMemPtr(dst), value, n);
+    invalidateCode(uc, dst, n);
     SET_RET_V(dst);
 }
 
@@ -199,6 +205,7 @@ static void br_mr_read(BridgeMap *o, uc_engine *uc) {
     uc_reg_read(uc, UC_ARM_REG_R2, &l);
     char *buf = getMrpMemPtr(p);
     ret = my_read(f, buf, l);
+    if ((int32_t)ret > 0) invalidateCode(uc, p, ret);
     LOG("ext call %s(%d, 0x%X, %u): %d\n", o->name, f, p, l, ret);
     SET_RET_V(ret);
 }
@@ -1185,6 +1192,7 @@ static void runCode(uc_engine *uc, uint32_t startAddr, uint32_t stopAddr, bool i
     uc_err err = uc_emu_start(uc, startAddr, stopAddr, 0, 0);  // 似乎unicorn 1.0.2之前并不会在pc==stopAddr时立即停止
     if (err) {
         printf("Failed on uc_emu_start() with error returned: %u (%s)\n", err, uc_strerror(err));
+        dumpREG(uc);
         exit(1);
     }
 }

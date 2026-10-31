@@ -1,5 +1,6 @@
 #include <jni.h>
 #include <pthread.h>
+#include <stdarg.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -15,6 +16,8 @@
 #define MSG_RESUME 2
 #define MSG_EDIT_DONE 3
 #define QUEUE_SIZE 256
+#define LOG_LINES 200
+#define LOG_LINE_LEN 240
 
 typedef struct {
     int32_t kind, code, p1, p2;
@@ -36,6 +39,9 @@ static int paused;
 static volatile int running;
 static char *startName;
 static char *editText;
+static pthread_mutex_t logLock = PTHREAD_MUTEX_INITIALIZER;
+static char logRing[LOG_LINES][LOG_LINE_LEN];
+static unsigned logCount;
 
 static int64_t nowMs(void) {
     struct timespec ts;
@@ -84,15 +90,67 @@ static void post(int32_t kind, int32_t code, int32_t p1, int32_t p2, char *text)
     pthread_mutex_unlock(&queueLock);
 }
 
-static void callExit(int code) {
+static void callExit(int code, const char *detail) {
     running = 0;
     JNIEnv *env = getEnv();
-    (*env)->CallStaticVoidMethod(env, nativeClass, midExit, code);
+    jbyteArray d = detail ? utf8Bytes(env, detail) : NULL;
+    (*env)->CallStaticVoidMethod(env, nativeClass, midExit, code, d);
+    unref(env, d, NULL);
+}
+
+static void ringAdd(const char *line) {
+    pthread_mutex_lock(&logLock);
+    char *slot = logRing[logCount % LOG_LINES];
+    size_t len = strnlen(line, LOG_LINE_LEN - 1);
+    while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) len--;
+    memcpy(slot, line, len);
+    slot[len] = 0;
+    logCount++;
+    pthread_mutex_unlock(&logLock);
+}
+
+void vmrp_log(const char *fmt, ...) {
+    char line[LOG_LINE_LEN];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(line, sizeof(line), fmt, ap);
+    va_end(ap);
+    __android_log_write(ANDROID_LOG_DEBUG, "vmrp", line);
+    ringAdd(line);
+}
+
+void vmrp_log_str(const char *s) {
+    if (s == NULL) return;
+    char line[LOG_LINE_LEN];
+    snprintf(line, sizeof(line), "%s", s);
+    __android_log_write(ANDROID_LOG_DEBUG, "vmrp", line);
+    ringAdd(line);
 }
 
 void vmrp_android_fatal(int code, const char *file, int line) {
     __android_log_print(ANDROID_LOG_ERROR, "vmrp", "fatal exit(%d) at %s:%d", code, file, line);
-    callExit(code == 0 ? 0 : 2);
+    char *report = NULL;
+    if (code != 0) {
+        report = malloc(LOG_LINES * LOG_LINE_LEN + 512);
+        if (report != NULL) {
+            const char *base = strrchr(file, '/');
+            base = base ? base + 1 : file;
+            int n = snprintf(report, 512, "native build: %s %s\nfatal exit(%d) at %s:%d\n---- 最近日志 ----\n", __DATE__, __TIME__, code, base, line);
+            pthread_mutex_lock(&logLock);
+            unsigned first = logCount > LOG_LINES ? logCount - LOG_LINES : 0;
+            for (unsigned i = first; i < logCount; i++) {
+                const char *l = logRing[i % LOG_LINES];
+                size_t len = strlen(l);
+                memcpy(report + n, l, len);
+                n += (int)len;
+                report[n++] = '\n';
+            }
+            pthread_mutex_unlock(&logLock);
+            report[n] = 0;
+        }
+    }
+    callExit(code == 0 ? 0 : 2, report);
+    free(report);
     pthread_exit(NULL);
 }
 
@@ -154,7 +212,7 @@ char *editGetText(int32 edit) {
 }
 
 void plat_exit(void) {
-    callExit(0);
+    callExit(0, NULL);
 }
 
 int32_t plat_playSound(int32_t type, const void *data, uint32_t dataLen, int32_t loop) {
@@ -226,7 +284,7 @@ static void dispatch(Msg *m) {
 static void *emuThread(void *arg) {
     getEnv();
     if (startVmrp(startName) != MR_SUCCESS) {
-        callExit(1);
+        callExit(1, NULL);
         return NULL;
     }
     while (running) {
@@ -281,7 +339,7 @@ Java_ru_playsoftware_j2meloader_mrp_MrpNative_nativeStart(JNIEnv *env, jclass cl
     if (running) return JNI_FALSE;
     nativeClass = (*env)->NewGlobalRef(env, clazz);
     midFrame = (*env)->GetStaticMethodID(env, clazz, "onFrame", "()V");
-    midExit = (*env)->GetStaticMethodID(env, clazz, "onExit", "(I)V");
+    midExit = (*env)->GetStaticMethodID(env, clazz, "onExit", "(I[B)V");
     midPlaySound = (*env)->GetStaticMethodID(env, clazz, "playSound", "(I[BI)I");
     midStopSound = (*env)->GetStaticMethodID(env, clazz, "stopSound", "(I)I");
     midVibrate = (*env)->GetStaticMethodID(env, clazz, "vibrate", "(I)V");

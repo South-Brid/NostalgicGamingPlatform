@@ -90,6 +90,13 @@ final class GameLibrary {
 				.putString(PREF_RECENT, TextUtils.join(",", ids)).apply();
 	}
 
+	static void removeRecent(Context context, String id) {
+		List<String> ids = recentIds(context);
+		ids.remove(id);
+		PreferenceManager.getDefaultSharedPreferences(context).edit()
+				.putString(PREF_RECENT, TextUtils.join(",", ids)).apply();
+	}
+
 	static Set<String> installedIds(Context context) {
 		Set<String> ids = new HashSet<>();
 		File[] dirs = new File(Config.getAppDir()).listFiles();
@@ -101,6 +108,12 @@ final class GameLibrary {
 		File[] mrps = new File(MrpRuntime.root(context), "mythroad").listFiles((d, n) -> n.endsWith(".mrp"));
 		if (mrps != null) {
 			for (File f : mrps) ids.add(f.getName().substring(0, f.getName().length() - 4));
+		}
+		File[] sandboxes = new File(MrpRuntime.root(context), "games").listFiles();
+		if (sandboxes != null) {
+			for (File d : sandboxes) {
+				if (new File(new File(d, "mythroad"), d.getName() + ".mrp").isFile()) ids.add(d.getName());
+			}
 		}
 		return ids;
 	}

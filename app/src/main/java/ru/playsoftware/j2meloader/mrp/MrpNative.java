@@ -32,7 +32,7 @@ public final class MrpNative {
 	interface Host {
 		void onFrame();
 
-		void onExit(int code);
+		void onExit(int code, byte[] detail);
 
 		int playSound(int type, byte[] data, boolean loop);
 
@@ -101,8 +101,8 @@ public final class MrpNative {
 	}
 
 	@SuppressWarnings("unused")
-	private static void onExit(int code) {
-		host.onExit(code);
+	private static void onExit(int code, byte[] detail) {
+		host.onExit(code, detail);
 	}
 
 	@SuppressWarnings("unused")
