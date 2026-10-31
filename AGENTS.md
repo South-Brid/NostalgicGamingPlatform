@@ -42,6 +42,8 @@ APK 不内置游戏，游戏都通过「导入游戏包」进入 App。
 - 1.2.1 Java / MRP 两个独立游戏厅；MRP 键盘支持和 Java 一样的样式；MRP 越界内存访问不再直接崩溃
 - 1.2.2 删除游戏同时清空存档；MRP 每个游戏独立沙盒；修复 MRP 加载插件后崩溃（如圣斗士星矢之冥王神话）；MRP 崩溃显示详细报告；
   竖屏手机键盘·方向键版、横屏精简改为 2/4/6/8 + 1/3/5/7/9 布局
+- 1.2.3 按人体工学重排按键（横屏主键组在下方拇指位置、功能键小号放上方；竖屏左右键在 ↑ 两侧）；
+  Java / MRP 支持自定义按键布局（按组拖动、缩放、透明度，每个游戏每种样式单独保存）
 
 ## 游戏来源
 1. 内置：`app/src/main/assets/games/`（目前为空，`prepare_games.py` 不带 `--catalog` 时会生成）
@@ -77,9 +79,14 @@ APK 不内置游戏，游戏都通过「导入游戏包」进入 App。
 - `GameIcons`：图标（Java 取 jar 里的图标；MRP 没有图标，显示首字 + 分类颜色）
 
 ### Java 游戏（J2ME Loader 原有部分）
-- `VirtualKeyboard` 新增布局（原版只有 0-6）：7 横屏标准、8 横屏精简（左边是 2/4/6/8 数字十字、中间空，右边功能键 + 1/3/7/9/*/0/#，5 在 1/3/7/9 正中间）、9 方向键分离（5 画成确定，按下发送 5）；
-  2 手机键盘·方向键版（竖屏：左软键/菜单/右软键、↑、←确定→、↓、完整九宫格；软键行和方向键行比数字行矮，`getPhoneKeyboardHeight` 按这个算）；
-  两侧按键在 `applyLandscapeOffsets()` 里居中并离边缘留白（`LANDSCAPE_EDGE_X/Y`）
+- `VirtualKeyboard` 新增布局（原版只有 0-6）：7 横屏标准、8 横屏精简（左边是 2/4/6/8 数字十字、中间空，右边 1/3/7/9 + 正中的 5）、9 方向键分离（5 画成确定，按下发送 5）；
+  2 手机键盘·方向键版（竖屏：左键/↑/右键、←确定→、菜单/↓、完整九宫格；`getPhoneKeyboardHeight` 返回 `KeyLayouts.portraitHeight`）
+  - 样式 2/7/8/9 的按键位置不再走 snap 链，`snapKeys()` 在 `snapHubKeys()` 里用 `KeyLayouts` + `KeyCustom` 直接摆放（不在布局里的键隐藏）；
+    横屏方向键组和数字键组在下方拇指落点，功能键（左键/右键/菜单/*0#）小号放上方
+- `KeyLayouts`（默认几何）/ `KeyCustom`（每游戏每样式的组偏移、缩放、透明度）/ `KeyEditPanel`（编辑面板），都在 `gamehub` 包，Java 和 MRP 共用
+  - 样式 2/7/8/9/10 使用；分组：`dpad`（方向键）、`num`（数字键）、`soft`（左右键）、`star`（*0#）、`menu`（菜单）、`nav`（样式 2 的导航区），按组拖动、缩放（60%-160%）、整体透明度（20%-100%）
+  - 存储：Java 在 `<配置目录>/gamehub_vk_<样式>.json`（`VirtualKeyboard.customFile`，跟配置目录一起删除）；MRP 在 `files/mrp/keys/<id>.<样式>.json`，删游戏时清掉
+  - 入口：Java 在「虚拟键盘选项 → 编辑按键布局」（这几种样式下隐藏「调整按键大小」「保存按键布局」，不再用 J2ME 原来的编辑），MRP 在游戏菜单「自定义按键布局」；编辑中按键不发给游戏
 - `MicroActivity.orientationFor()` 按键盘样式强制横/竖屏；游戏内「切换键盘」也用 `KeyboardStyles.pick()`
 - 转场：`GameLauncher.start()` 进入动画（`res/anim/game_enter`）；`launch_overlay`（`view_game_launch.xml`）显示图标/名字/加载中，
   `Canvas.setFirstFrameListener` 收到第一帧后淡出；退出时 `showExitOverlay()`，`MidletThread.notifyDestroyed()` 延迟杀进程让动画播完
@@ -110,7 +117,7 @@ APK 不内置游戏，游戏都通过「导入游戏包」进入 App。
   删除沙盒时绝不能递归进符号链接（会删掉共享字库/插件），`MrpRuntime.clearGame()` 用 `Os.lstat` 判断
 - Java 侧：`ru/playsoftware/j2meloader/mrp/`
   - `MrpActivity` 跑在独立进程 `:mrp`，返回键/「菜单」键打开菜单（切换键盘样式、退出）
-  - `MrpGameView` 画 240x320 屏幕和虚拟键盘；样式 2 手机键盘·方向键版（默认；从上到下：左键/菜单/右键、↑、←确定→、↓、完整九宫格，前几行比数字行矮）、10 方向+数字（只给 MRP）、7/9/8 横屏，
+  - `MrpGameView` 画 240x320 屏幕和虚拟键盘；样式 2 手机键盘·方向键版（默认；从上到下：左键/↑/右键、←确定→、菜单/↓、完整九宫格）、10 方向+数字（只给 MRP）、7/9/8 横屏，按键几何来自 `KeyLayouts`，
     方向键分离里的「5/确定」在 MRP 里发送确定键
   - 每个游戏的键盘样式存在 `files/mrp/keys/<id>`（文件，跨进程可见），默认值 `KeyboardStyles.getMrpDefault()`
 - 导入时游戏名取 mrp 文件头里的中文名（GBK，偏移 0x1C，24 字节）

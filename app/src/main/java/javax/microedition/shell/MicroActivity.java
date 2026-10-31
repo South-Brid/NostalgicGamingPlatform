@@ -100,6 +100,8 @@ import ru.playsoftware.j2meloader.BuildConfig;
 import ru.playsoftware.j2meloader.R;
 import ru.playsoftware.j2meloader.config.Config;
 import ru.playsoftware.j2meloader.databinding.ActivityMicroBinding;
+import ru.playsoftware.j2meloader.gamehub.KeyEditPanel;
+import ru.playsoftware.j2meloader.gamehub.KeyLayouts;
 import ru.playsoftware.j2meloader.gamehub.KeyboardStyles;
 import ru.playsoftware.j2meloader.util.Constants;
 import ru.playsoftware.j2meloader.util.LogUtils;
@@ -589,8 +591,10 @@ public class MicroActivity extends AppCompatActivity {
 			menu.setGroupVisible(R.id.action_group_canvas, true);
 			VirtualKeyboard vk = ContextHolder.getVk();
 			if (vk != null) {
+				boolean hub = vk.isHubStyle();
 				boolean visible = vk.getLayoutEditMode() != VirtualKeyboard.LAYOUT_EOF;
-				menu.findItem(R.id.action_layout_edit_finish).setVisible(visible);
+				menu.findItem(R.id.action_layout_edit_finish).setVisible(visible && !hub);
+				menu.findItem(R.id.action_layout_scale_mode).setVisible(!hub);
 			}
 		} else {
 			menu.setGroupVisible(R.id.action_group_canvas, false);
@@ -629,7 +633,9 @@ public class MicroActivity extends AppCompatActivity {
 
 	private void handleVkOptions(int id) {
 		VirtualKeyboard vk = ContextHolder.getVk();
-		if (id == R.id.action_layout_edit_mode) {
+		if (id == R.id.action_layout_edit_mode && vk.isHubStyle()) {
+			startHubEdit(vk);
+		} else if (id == R.id.action_layout_edit_mode) {
 			vk.setLayoutEditMode(VirtualKeyboard.LAYOUT_KEYS);
 			Toast.makeText(this, R.string.layout_edit_mode, Toast.LENGTH_SHORT).show();
 		} else if (id == R.id.action_layout_scale_mode) {
@@ -644,6 +650,45 @@ public class MicroActivity extends AppCompatActivity {
 		} else if (id == R.id.action_hide_buttons) {
 			showHideButtonDialog();
 		}
+	}
+
+	private void startHubEdit(VirtualKeyboard vk) {
+		KeyEditPanel panel = new KeyEditPanel(this);
+		panel.setKeyAlpha(vk.getHubAlpha());
+		panel.setSelected(null, 1f);
+		vk.startHubEdit(group -> panel.setSelected(group == null ? null : KeyLayouts.groupName(group),
+				group == null ? 1f : vk.getHubScale(group)));
+		panel.attach(this, new KeyEditPanel.Callback() {
+			@Override
+			public void onScale(float scale) {
+				vk.setHubScale(scale);
+			}
+
+			@Override
+			public void onAlpha(float alpha) {
+				vk.setHubAlpha(alpha);
+			}
+
+			@Override
+			public void onReset() {
+				vk.resetHub();
+				panel.setKeyAlpha(1f);
+				String group = vk.getHubSelected();
+				panel.setSelected(group == null ? null : KeyLayouts.groupName(group), 1f);
+			}
+
+			@Override
+			public void onCancel() {
+				vk.finishHubEdit(false);
+				panel.detach();
+			}
+
+			@Override
+			public void onSave() {
+				vk.finishHubEdit(true);
+				panel.detach();
+			}
+		});
 	}
 
 	@SuppressLint("CheckResult")

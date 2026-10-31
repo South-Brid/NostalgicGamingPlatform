@@ -62,6 +62,9 @@ import java.util.Locale;
 import ru.playsoftware.j2meloader.BuildConfig;
 import ru.playsoftware.j2meloader.R;
 import ru.playsoftware.j2meloader.databinding.ViewGameLaunchBinding;
+import ru.playsoftware.j2meloader.gamehub.KeyCustom;
+import ru.playsoftware.j2meloader.gamehub.KeyEditPanel;
+import ru.playsoftware.j2meloader.gamehub.KeyLayouts;
 import ru.playsoftware.j2meloader.gamehub.KeyboardStyles;
 
 public class MrpActivity extends AppCompatActivity implements MrpNative.Host {
@@ -282,15 +285,16 @@ public class MrpActivity extends AppCompatActivity implements MrpNative.Host {
 	}
 
 	private void applyKeyboard(int type) {
-		gameView.setStyle(type);
+		gameView.setStyle(type, KeyCustom.load(MrpRuntime.customFile(this, gameId, type)));
 		setRequestedOrientation(KeyboardStyles.isLandscape(type) ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 				: ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
 	}
 
 	private void showMenu() {
-		if (exiting) return;
+		if (exiting || gameView.isEditing()) return;
 		int current = gameView.getStyle();
-		String[] items = {"▶  继续游戏", "⌨  切换键盘样式（" + KeyboardStyles.title(current) + "）", "⏻  退出游戏"};
+		String[] items = {"▶  继续游戏", "⌨  切换键盘样式（" + KeyboardStyles.title(current) + "）",
+				"✥  自定义按键布局", "⏻  退出游戏"};
 		new AlertDialog.Builder(this, R.style.HubDialog)
 				.setTitle(getIntent().getStringExtra(EXTRA_NAME))
 				.setItems(items, (d, which) -> {
@@ -300,10 +304,64 @@ public class MrpActivity extends AppCompatActivity implements MrpNative.Host {
 							applyKeyboard(type);
 						});
 					} else if (which == 2) {
+						startKeyEdit();
+					} else if (which == 3) {
 						exit();
 					}
 				})
 				.show();
+	}
+
+	private void startKeyEdit() {
+		int style = gameView.getStyle();
+		File file = MrpRuntime.customFile(this, gameId, style);
+		KeyCustom backup = gameView.getCustom().copy();
+		KeyEditPanel panel = new KeyEditPanel(this);
+		panel.setKeyAlpha(backup.hasAlpha ? backup.alpha : 1f);
+		panel.setSelected(null, 1f);
+		gameView.setEditing(true, group -> panel.setSelected(group == null ? null : KeyLayouts.groupName(group),
+				group == null ? 1f : gameView.getCustom().group(group)[2]));
+		panel.attach(this, new KeyEditPanel.Callback() {
+			@Override
+			public void onScale(float scale) {
+				String group = gameView.getSelectedGroup();
+				if (group == null) return;
+				gameView.getCustom().group(group)[2] = scale;
+				gameView.relayout();
+			}
+
+			@Override
+			public void onAlpha(float alpha) {
+				gameView.getCustom().setAlpha(alpha);
+				gameView.invalidate();
+			}
+
+			@Override
+			public void onReset() {
+				gameView.getCustom().reset();
+				gameView.relayout();
+				panel.setKeyAlpha(1f);
+				String group = gameView.getSelectedGroup();
+				panel.setSelected(group == null ? null : KeyLayouts.groupName(group), 1f);
+			}
+
+			@Override
+			public void onCancel() {
+				gameView.setCustom(backup);
+				finishKeyEdit(panel);
+			}
+
+			@Override
+			public void onSave() {
+				gameView.getCustom().save(file);
+				finishKeyEdit(panel);
+			}
+		});
+	}
+
+	private void finishKeyEdit(KeyEditPanel panel) {
+		gameView.setEditing(false, null);
+		panel.detach();
 	}
 
 	@Override

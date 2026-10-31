@@ -15,8 +15,8 @@ android {
         applicationId "com.gamehub.retro"
         minSdk MIN_SDK
         targetSdk TARGET_SDK
-        versionCode 8
-        versionName "1.2.2"
+        versionCode 9
+        versionName "1.2.3"
         resValue 'string', 'app_name', '怀旧游戏厅'
         vectorDrawables.useSupportLibrary = true
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"

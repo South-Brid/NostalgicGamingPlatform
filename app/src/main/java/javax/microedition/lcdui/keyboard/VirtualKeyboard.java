@@ -30,6 +30,7 @@ import android.util.SparseBooleanArray;
 import android.view.View;
 
 import androidx.annotation.NonNull;
+import androidx.core.util.Consumer;
 
 import java.io.DataInputStream;
 import java.io.File;
@@ -38,6 +39,9 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import javax.microedition.lcdui.Canvas;
 import javax.microedition.lcdui.graphics.CanvasWrapper;
@@ -48,6 +52,8 @@ import javax.microedition.util.ContextHolder;
 import ru.playsoftware.j2meloader.config.Config;
 import ru.playsoftware.j2meloader.config.ProfileModel;
 import ru.playsoftware.j2meloader.config.ProfilesManager;
+import ru.playsoftware.j2meloader.gamehub.KeyCustom;
+import ru.playsoftware.j2meloader.gamehub.KeyLayouts;
 
 public class VirtualKeyboard implements Overlay, Runnable {
 	private static final String TAG = VirtualKeyboard.class.getSimpleName();
@@ -197,6 +203,15 @@ public class VirtualKeyboard implements Overlay, Runnable {
 			Math.min(ContextHolder.getDisplayWidth(), ContextHolder.getDisplayHeight()) / 6.0f;
 	private float snapRadius;
 	private int layoutVariant;
+	private KeyCustom custom = new KeyCustom();
+	private int customStyle = -1;
+	private boolean hubEditing;
+	private KeyCustom hubBackup;
+	private String hubSelected;
+	private Consumer<String> hubListener;
+	private float hubStartX, hubStartY, hubStartDx, hubStartDy;
+	private final String[] keyGroups = new String[KEYBOARD_SIZE];
+	private final Map<String, RectF> hubBaseBoxes = new HashMap<>();
 
 	public VirtualKeyboard(ProfileModel settings) {
 		this.settings = settings;
@@ -645,7 +660,7 @@ public class VirtualKeyboard implements Overlay, Runnable {
 
 	public float getPhoneKeyboardHeight(float w, float h) {
 		if (layoutVariant == TYPE_PHONE_ARROWS) {
-			return getKeySize(w, h) * (4 * keyScales[7] + 3 * keyScales[1] + keyScales[3]);
+			return KeyLayouts.portraitHeight(2, w, h);
 		}
 		return PHONE_KEY_ROWS * getKeySize(w, h) * PHONE_KEY_SCALE_Y;
 	}
@@ -944,7 +959,200 @@ public class VirtualKeyboard implements Overlay, Runnable {
 		vKey.snapValid = true;
 	}
 
+	public boolean isHubStyle() {
+		return layoutVariant == TYPE_PHONE_ARROWS || layoutVariant == TYPE_LANDSCAPE
+				|| layoutVariant == TYPE_LANDSCAPE_SIMPLE || layoutVariant == TYPE_LANDSCAPE_SPLIT;
+	}
+
+	private File customFile(int style) {
+		return new File(settings.dir, "gamehub_vk_" + style + ".json");
+	}
+
+	private int keyIndexOf(String id) {
+		switch (id) {
+			case "soft_l":
+				return KEY_SOFT_LEFT;
+			case "soft_r":
+				return KEY_SOFT_RIGHT;
+			case "menu":
+				return KEY_MENU;
+			case "up":
+				return KEY_UP;
+			case "down":
+				return KEY_DOWN;
+			case "left":
+				return KEY_LEFT;
+			case "right":
+				return KEY_RIGHT;
+			case "ok":
+				return KEY_FIRE;
+			case "*":
+				return KEY_STAR;
+			case "#":
+				return KEY_POUND;
+			case "0":
+				return KEY_NUM0;
+			default:
+				return KEY_NUM1 + (id.charAt(0) - '1');
+		}
+	}
+
+	private void snapHubKeys() {
+		if (customStyle != layoutVariant) {
+			custom = KeyCustom.load(customFile(layoutVariant));
+			customStyle = layoutVariant;
+		}
+		float w = screen.width(), h = screen.height();
+		List<KeyLayouts.Key> layout = KeyLayouts.layout(layoutVariant, w, h,
+				new RectF(virtualScreen.left - screen.left, virtualScreen.top - screen.top,
+						virtualScreen.right - screen.left, virtualScreen.bottom - screen.top));
+		hubBaseBoxes.clear();
+		for (KeyLayouts.Key k : layout) {
+			RectF box = hubBaseBoxes.get(k.group);
+			if (box == null) hubBaseBoxes.put(k.group, new RectF(k.rect));
+			else box.union(k.rect);
+		}
+		custom.apply(layout, w, h);
+		for (int i = 0; i < keypad.length; i++) {
+			keypad[i].visible = false;
+			keyGroups[i] = null;
+		}
+		obscuresVirtualScreen = false;
+		boolean portrait = isPhone();
+		for (KeyLayouts.Key k : layout) {
+			int i = keyIndexOf(k.id);
+			VirtualKey key = keypad[i];
+			key.rect.set(k.rect);
+			key.rect.offset(screen.left, screen.top);
+			key.visible = true;
+			keyGroups[i] = k.group;
+			key.corners = (int) (Math.min(key.rect.width(), key.rect.height()) * 0.25F);
+			key.snapValid = true;
+			key.opaque = true;
+			if (!portrait && RectF.intersects(key.rect, virtualScreen)) {
+				obscuresVirtualScreen = true;
+				key.opaque = false;
+			}
+		}
+		boolean opaque = !obscuresVirtualScreen || settings.vkForceOpacity;
+		for (VirtualKey key : keypad) {
+			key.opaque &= opaque;
+		}
+	}
+
+	public void startHubEdit(Consumer<String> listener) {
+		hubBackup = custom.copy();
+		hubListener = listener;
+		hubSelected = null;
+		hubEditing = true;
+		for (int i = 0; i < associatedKeys.length; i++) {
+			if (associatedKeys[i] != null) {
+				associatedKeys[i].onUp();
+				associatedKeys[i] = null;
+			}
+		}
+		handler.removeCallbacks(this);
+		visible = true;
+		overlayView.postInvalidate();
+	}
+
+	public boolean isHubEditing() {
+		return hubEditing;
+	}
+
+	public String getHubSelected() {
+		return hubSelected;
+	}
+
+	public float getHubScale(String group) {
+		return custom.group(group)[2];
+	}
+
+	public float getHubAlpha() {
+		return custom.hasAlpha ? custom.alpha : 1f;
+	}
+
+	public void setHubScale(float scale) {
+		if (hubSelected == null) return;
+		custom.group(hubSelected)[2] = scale;
+		relayoutHub();
+	}
+
+	public void setHubAlpha(float alpha) {
+		custom.setAlpha(alpha);
+		overlayView.postInvalidate();
+	}
+
+	public void resetHub() {
+		custom.reset();
+		relayoutHub();
+	}
+
+	public void finishHubEdit(boolean save) {
+		if (save) custom.save(customFile(layoutVariant));
+		else custom = hubBackup;
+		hubBackup = null;
+		hubEditing = false;
+		hubSelected = null;
+		relayoutHub();
+		hide();
+	}
+
+	private void relayoutHub() {
+		snapKeys();
+		overlayView.postInvalidate();
+	}
+
+	private RectF hubGroupBox(String group) {
+		RectF box = null;
+		for (int i = 0; i < keypad.length; i++) {
+			if (!group.equals(keyGroups[i]) || !keypad[i].visible) continue;
+			if (box == null) box = new RectF(keypad[i].rect);
+			else box.union(keypad[i].rect);
+		}
+		return box;
+	}
+
+	private void hubPressed(float x, float y) {
+		String group = null;
+		for (int i = 0; i < keypad.length; i++) {
+			if (keypad[i].contains(x, y)) {
+				group = keyGroups[i];
+				break;
+			}
+		}
+		hubSelected = group;
+		if (group != null) {
+			float[] g = custom.group(group);
+			hubStartX = x;
+			hubStartY = y;
+			hubStartDx = g[0];
+			hubStartDy = g[1];
+		}
+		if (hubListener != null) hubListener.accept(group);
+		overlayView.postInvalidate();
+	}
+
+	private void hubDragged(float x, float y) {
+		if (hubSelected == null) return;
+		float u = Math.min(screen.width(), screen.height());
+		float[] g = custom.group(hubSelected);
+		g[0] = hubStartDx + (x - hubStartX) / u;
+		g[1] = hubStartDy + (y - hubStartY) / u;
+		snapKeys();
+		RectF base = hubBaseBoxes.get(hubSelected), now = hubGroupBox(hubSelected);
+		if (base != null && now != null) {
+			g[0] = (now.centerX() - screen.left - base.centerX()) / u;
+			g[1] = (now.centerY() - screen.top - base.centerY()) / u;
+		}
+		overlayView.postInvalidate();
+	}
+
 	private void snapKeys() {
+		if (isHubStyle() && screen != null) {
+			snapHubKeys();
+			return;
+		}
 		applyLandscapeOffsets();
 		obscuresVirtualScreen = false;
 		boolean isPhone = isPhone();
@@ -1033,7 +1241,7 @@ public class VirtualKeyboard implements Overlay, Runnable {
 		snapKeys();
 		overlayView.postInvalidate();
 		int delay = settings.vkHideDelay;
-		if (delay > 0 && obscuresVirtualScreen && layoutEditMode == LAYOUT_EOF) {
+		if (delay > 0 && obscuresVirtualScreen && layoutEditMode == LAYOUT_EOF && !hubEditing) {
 			for (VirtualKey key : associatedKeys) {
 				if (key != null) {
 					return;
@@ -1078,11 +1286,36 @@ public class VirtualKeyboard implements Overlay, Runnable {
 					key.paint(g);
 				}
 			}
+			if (hubEditing) paintHubOutlines(g);
+		}
+	}
+
+	private void paintHubOutlines(CanvasWrapper g) {
+		Map<String, RectF> boxes = new HashMap<>();
+		for (int i = 0; i < keypad.length; i++) {
+			if (keyGroups[i] == null || !keypad[i].visible) continue;
+			RectF box = boxes.get(keyGroups[i]);
+			if (box == null) boxes.put(keyGroups[i], new RectF(keypad[i].rect));
+			else box.union(keypad[i].rect);
+		}
+		RectF r = new RectF();
+		for (Map.Entry<String, RectF> e : boxes.entrySet()) {
+			boolean selected = e.getKey().equals(hubSelected);
+			g.setDrawColor(selected ? 0xFFFFC24B : 0x80FFFFFF);
+			for (int i = 0; i < (selected ? 3 : 1); i++) {
+				r.set(e.getValue());
+				r.inset(-i, -i);
+				g.drawRect(r);
+			}
 		}
 	}
 
 	@Override
 	public boolean pointerPressed(int pointer, float x, float y) {
+		if (hubEditing) {
+			hubPressed(x, y);
+			return false;
+		}
 		switch (layoutEditMode) {
 			case LAYOUT_EOF:
 				if (pointer > associatedKeys.length) {
@@ -1135,6 +1368,10 @@ public class VirtualKeyboard implements Overlay, Runnable {
 
 	@Override
 	public boolean pointerDragged(int pointer, float x, float y) {
+		if (hubEditing) {
+			hubDragged(x, y);
+			return false;
+		}
 		switch (layoutEditMode) {
 			case LAYOUT_EOF:
 				if (pointer > associatedKeys.length) {
@@ -1207,6 +1444,7 @@ public class VirtualKeyboard implements Overlay, Runnable {
 
 	@Override
 	public boolean pointerReleased(int pointer, float x, float y) {
+		if (hubEditing) return false;
 		if (layoutEditMode == LAYOUT_EOF) {
 			if (pointer > associatedKeys.length) {
 				return false;
@@ -1260,7 +1498,7 @@ public class VirtualKeyboard implements Overlay, Runnable {
 	@Override
 	public void hide() {
 		long delay = settings.vkHideDelay;
-		if (delay > 0 && obscuresVirtualScreen && layoutEditMode == LAYOUT_EOF) {
+		if (delay > 0 && obscuresVirtualScreen && layoutEditMode == LAYOUT_EOF && !hubEditing) {
 			handler.postDelayed(this, delay);
 		}
 	}
@@ -1429,6 +1667,7 @@ public class VirtualKeyboard implements Overlay, Runnable {
 				fgColor = settings.vkFgColor;
 			}
 			int alpha = (opaque || layoutEditMode != LAYOUT_EOF ? 0xFF : settings.vkAlpha) << 24;
+			if (isHubStyle() && custom.hasAlpha) alpha = Math.round(custom.alpha * 255) << 24;
 			g.setFillColor(alpha | bgColor);
 			g.setTextColor(alpha | fgColor);
 			g.setDrawColor(alpha | settings.vkOutlineColor);

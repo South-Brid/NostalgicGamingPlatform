@@ -8,6 +8,8 @@ import android.graphics.RectF;
 import android.graphics.Shader;
 import android.view.View;
 
+import java.util.List;
+
 /** Schematic preview of a virtual keyboard layout (types match VirtualKeyboard.TYPE_*) */
 class KeyboardPreviewView extends View {
 	private static final int KEY = 0x99D0D4E8;
@@ -42,7 +44,11 @@ class KeyboardPreviewView extends View {
 
 		float pad = w * 0.07f;
 		float bodyL = left + pad, bodyR = left + w - pad, bodyT = pad * 1.4f, bodyB = h - pad * 1.4f;
-		boolean phone = type == 1 || type == 2 || type == KeyboardStyles.ARROWS_NUMBERS;
+		if (type == 2 || type == KeyboardStyles.ARROWS_NUMBERS) {
+			drawPortrait(canvas, left, bodyL, bodyT, bodyR, bodyB, w, h);
+			return;
+		}
+		boolean phone = type == 1;
 		float screenB = phone ? bodyT + (bodyB - bodyT) * 0.5f : bodyB;
 		rect.set(bodyL, bodyT, bodyR, screenB);
 		paint.setShader(new LinearGradient(0, bodyT, 0, screenB, 0xFF3D4F8F, 0xFF1F7A6B, Shader.TileMode.CLAMP));
@@ -50,36 +56,6 @@ class KeyboardPreviewView extends View {
 		paint.setShader(null);
 
 		float bw = bodyR - bodyL;
-		if (type == KeyboardStyles.ARROWS_NUMBERS) {
-			float gridT = screenB + pad * 0.8f;
-			float cell = Math.min(bw / 6.4f, (bodyB - gridT) / 5f);
-			soft(canvas, bodyL, bodyR, gridT, cell);
-			float gridB = gridT + cell * 5f;
-			dpad(canvas, bodyL, gridB - cell * 0.5f, cell);
-			numbers(canvas, bodyR - cell * 3, gridB, cell);
-			return;
-		}
-		if (type == 2) {
-			float gridT = screenB + pad * 0.8f;
-			float cellW = bw / 3f, numH = (bodyB - gridT) / 7.3f;
-			float softH = numH * 0.75f, padH = numH * 0.85f;
-			for (int col = 0; col < 3; col++) {
-				key(canvas, bodyL + col * cellW, gridT, cellW, softH, SOFT);
-			}
-			float padT = gridT + softH;
-			key(canvas, bodyL + cellW, padT, cellW, padH, ARROW);
-			key(canvas, bodyL, padT + padH, cellW, padH, ARROW);
-			key(canvas, bodyL + cellW, padT + padH, cellW, padH, FIRE);
-			key(canvas, bodyL + cellW * 2, padT + padH, cellW, padH, ARROW);
-			key(canvas, bodyL + cellW, padT + padH * 2, cellW, padH, ARROW);
-			float numT = padT + padH * 3;
-			for (int row = 0; row < 4; row++) {
-				for (int col = 0; col < 3; col++) {
-					key(canvas, bodyL + col * cellW, numT + row * numH, cellW, numH, KEY);
-				}
-			}
-			return;
-		}
 		if (phone) {
 			float gridT = screenB + pad * 0.8f;
 			float cellW = bw / 3f, cellH = (bodyB - gridT) / 5f;
@@ -112,8 +88,19 @@ class KeyboardPreviewView extends View {
 		soft(canvas, bodyL, bodyR, gridB - cell * (type == 6 ? 3 : 4) - cell * 0.9f, cell);
 	}
 
+	private void drawPortrait(Canvas canvas, float left, float bodyL, float bodyT, float bodyR, float bodyB, float w, float h) {
+		float pad = bodyL - left;
+		float portrait = KeyLayouts.portraitHeight(type, w, h);
+		float screenB = h - portrait - 0.2f * KeyLayouts.rowHeight(w, h);
+		rect.set(bodyL, bodyT, bodyR, Math.max(bodyT + pad, screenB));
+		paint.setShader(new LinearGradient(0, bodyT, 0, rect.bottom, 0xFF3D4F8F, 0xFF1F7A6B, Shader.TileMode.CLAMP));
+		float r = w * 0.12f;
+		canvas.drawRoundRect(rect, r * 0.4f, r * 0.4f, paint);
+		paint.setShader(null);
+		drawKeys(canvas, KeyLayouts.layout(type, w, h, null), left, 0);
+	}
+
 	private void drawLandscape(Canvas canvas, int type) {
-		boolean simple = type == 8, split = type == 9;
 		float w = Math.min(getWidth() * 0.96f, getHeight() * 1.9f);
 		float h = w * 0.5f;
 		float left = (getWidth() - w) / 2f, top = (getHeight() - h) / 2f;
@@ -123,44 +110,25 @@ class KeyboardPreviewView extends View {
 		rect.set(left, top, left + w, top + h);
 		canvas.drawRoundRect(rect, r, r, paint);
 
-		float pad = h * 0.07f;
-		float screenH = h - pad * 2, screenW = screenH * 0.75f;
-		float screenL = left + (w - screenW) / 2f, screenT = top + pad;
-		rect.set(screenL, screenT, screenL + screenW, screenT + screenH);
-		paint.setShader(new LinearGradient(0, screenT, 0, screenT + screenH, 0xFF3D4F8F, 0xFF1F7A6B, Shader.TileMode.CLAMP));
+		float u = Math.min(w, h);
+		float screenH = h - 2 * 0.05f * u, screenW = screenH * 0.75f;
+		float screenL = (w - screenW) / 2f, screenT = 0.05f * u;
+		rect.set(left + screenL, top + screenT, left + screenL + screenW, top + screenT + screenH);
+		paint.setShader(new LinearGradient(0, top + screenT, 0, top + screenT + screenH, 0xFF3D4F8F, 0xFF1F7A6B, Shader.TileMode.CLAMP));
 		canvas.drawRoundRect(rect, r * 0.3f, r * 0.3f, paint);
 		paint.setShader(null);
 
-		float gap = screenL - left;
-		int rows = simple ? 4 : 5;
-		float cell = Math.min(gap * 0.85f / 3f, screenH / rows);
-		float gridL = screenL + screenW + (gap - cell * 3) / 2f, gridT = top + (h - cell * rows) / 2f;
-		key(canvas, gridL, gridT, cell, cell, SOFT);
-		if (simple || split) key(canvas, gridL + cell, gridT, cell, cell, SOFT);
-		key(canvas, gridL + cell * 2, gridT, cell, cell, SOFT);
-		for (int row = 1; row < rows; row++) {
-			for (int col = 0; col < 3; col++) {
-				if (simple && col == 1 && row < rows - 1) continue;
-				key(canvas, gridL + col * cell, gridT + row * cell, cell, cell,
-						split && row == 2 && col == 1 ? FIRE : KEY);
-			}
-		}
-
-		if (simple) key(canvas, gridL + cell, gridT + cell * 1.5f, cell, cell, KEY);
-
-		float padL = left + (gap - cell * 3) / 2f, padT = top + (h - cell * 3) / 2f;
-		for (int row = 0; row < 3; row++) {
-			for (int col = 0; col < 3; col++) {
-				boolean center = row == 1 && col == 1;
-				boolean cross = row == 1 || col == 1;
-				if ((simple || split) && !cross) continue;
-				if ((simple || split) && center) continue;
-				key(canvas, padL + col * cell, padT + row * cell, cell, cell,
-						simple ? KEY : center ? FIRE : cross ? ARROW : 0x66FFC24B);
-			}
-		}
+		RectF screen = new RectF(screenL, screenT, screenL + screenW, screenT + screenH);
+		drawKeys(canvas, KeyLayouts.layout(type, w, h, screen), left, top);
 	}
 
+	private void drawKeys(Canvas canvas, List<KeyLayouts.Key> keys, float dx, float dy) {
+		for (KeyLayouts.Key k : keys) {
+			int color = k.style == KeyLayouts.STYLE_SOFT ? SOFT : k.style == KeyLayouts.STYLE_ARROW ? ARROW
+					: k.style == KeyLayouts.STYLE_FIRE ? FIRE : KEY;
+			key(canvas, k.rect.left + dx, k.rect.top + dy, k.rect.width(), k.rect.height(), color);
+		}
+	}
 	private void numbers(Canvas c, float x, float bottom, float cell) {
 		for (int row = 0; row < 4; row++) {
 			for (int col = 0; col < 3; col++) {

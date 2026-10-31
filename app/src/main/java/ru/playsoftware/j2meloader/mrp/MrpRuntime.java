@@ -111,6 +111,11 @@ public final class MrpRuntime {
 		deleteTree(gameRoot(context, id));
 		//noinspection ResultOfMethodCallIgnored
 		keyboardFile(context, id).delete();
+		File[] customs = new File(root(context), "keys").listFiles((d, n) -> n.startsWith(id + "."));
+		if (customs != null) {
+			//noinspection ResultOfMethodCallIgnored
+			for (File f : customs) f.delete();
+		}
 		//noinspection ResultOfMethodCallIgnored
 		legacyGame(context, id).delete();
 		markLegacySeeded(context, id);
@@ -159,6 +164,10 @@ public final class MrpRuntime {
 				IOUtils.copy(in, out);
 			}
 		}
+	}
+
+	public static File customFile(Context context, String id, int style) {
+		return new File(new File(root(context), "keys"), id + "." + style + ".json");
 	}
 
 	private static File keyboardFile(Context context, String id) {
